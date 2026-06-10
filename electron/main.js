@@ -1,0 +1,277 @@
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
+
+const {
+  app, BrowserWindow, Tray, Menu, nativeImage,
+  ipcMain, Notification, dialog,
+} = require('electron')
+const { autoUpdater } = require('electron-updater')
+const path = require('path')
+const fs   = require('fs')
+const isDev = !app.isPackaged
+
+let mainWindow = null
+let tray = null
+
+/* ── ÍCONO DE APLICACIÓN ────────────────────────────────── */
+const ICON_PATH = path.join(__dirname, 'icon.png')
+
+function createTrayIcon() {
+  try {
+    if (fs.existsSync(ICON_PATH)) {
+      return nativeImage.createFromPath(ICON_PATH)
+    }
+  } catch {}
+  return nativeImage.createEmpty()
+}
+
+/* ── VENTANA PRINCIPAL ──────────────────────────────────── */
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1280, height: 840,
+    minWidth: 1024, minHeight: 600,
+    title: 'LabStock — Lab. Clínico Los Ángeles',
+    backgroundColor: '#EEF2F7',
+    icon: ICON_PATH,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  })
+
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173')
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show()
+    mainWindow.focus()
+  })
+
+  mainWindow.on('close', (e) => {
+    if (tray && !app.isQuitting) {
+      e.preventDefault()
+      mainWindow.hide()
+    }
+  })
+
+  /* ── MENÚ — solo lo esencial para técnicos ── */
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Archivo',
+      submenu: [
+        {
+          label: 'Minimizar a bandeja',
+          accelerator: 'CmdOrCtrl+M',
+          click: () => mainWindow.hide(),
+        },
+        { type: 'separator' },
+        {
+          label: 'Cerrar LabStock',
+          accelerator: 'CmdOrCtrl+Q',
+          click: () => { app.isQuitting = true; app.quit() },
+        },
+      ],
+    },
+    {
+      label: 'Ayuda',
+      submenu: [
+        {
+          label: 'Acerca de LabStock',
+          click: () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'LabStock',
+              message: `LabStock v${app.getVersion()}`,
+              detail: 'Laboratorio Clínico Los Ángeles\nCosta Sur, Guatemala\nSistema de gestión de inventario',
+              buttons: ['Cerrar'],
+            })
+          },
+        },
+      ],
+    },
+  ])
+  Menu.setApplicationMenu(menu)
+}
+
+/* ── BANDEJA ────────────────────────────────────────────── */
+function createTray() {
+  const icon = createTrayIcon()
+  tray = new Tray(icon)
+  tray.setToolTip('LabStock — Lab. Clínico Los Ángeles')
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Abrir LabStock', click: () => { mainWindow.show(); mainWindow.focus() } },
+    { type: 'separator' },
+    { label: 'Cerrar', click: () => { app.isQuitting = true; app.quit() } },
+  ]))
+  tray.on('click', () => {
+    if (mainWindow.isVisible()) mainWindow.hide()
+    else { mainWindow.show(); mainWindow.focus() }
+  })
+}
+
+/* ── IPC: NOTIFICACIÓN ──────────────────────────────────── */
+ipcMain.handle('show-notification', (_, { title, body }) => {
+  if (Notification.isSupported()) new Notification({ title, body }).show()
+})
+
+/* ── IPC: VERSIÓN ───────────────────────────────────────── */
+ipcMain.handle('get-app-version', () => app.getVersion())
+
+/* ── IPC: BADGE BANDEJA ─────────────────────────────────── */
+ipcMain.handle('update-alert-badge', (_, count) => {
+  if (!tray) return
+  tray.setToolTip(
+    count > 0
+      ? `LabStock — ${count} alerta${count > 1 ? 's' : ''} activa${count > 1 ? 's' : ''}`
+      : 'LabStock — Todo en orden'
+  )
+})
+
+/* ── IPC: EXPORTAR ARCHIVO (diálogo nativo) ─────────────── */
+ipcMain.handle('save-file', async (_, { defaultPath, content }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    defaultPath,
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+  })
+  if (canceled || !filePath) return { canceled: true }
+  fs.writeFileSync(filePath, content, 'utf8')
+  return { filePath }
+})
+
+/* ── IPC: IMPORTAR ARCHIVO (diálogo nativo) ─────────────── */
+ipcMain.handle('open-file', async () => {
+  const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+    properties: ['openFile'],
+  })
+  if (canceled || !filePaths.length) return { canceled: true }
+  const content = fs.readFileSync(filePaths[0], 'utf8')
+  return { content, filePath: filePaths[0] }
+})
+
+/* ── IPC: CREAR USUARIO (service role — solo main process) ─ */
+ipcMain.handle('create-user', async (_, { email, password, nombre, rol, sedeId }) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Credenciales de Supabase no configuradas.' }
+
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+
+    const { data, error: authErr } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nombre, rol, sede_id: sedeId || '' },
+    })
+    if (authErr) return { error: authErr.message }
+
+    // Actualizar perfil con sede_id correcta (el trigger ya crea la fila base)
+    await admin.from('profiles').update({
+      nombre,
+      rol,
+      sede_id: sedeId || null,
+    }).eq('id', data.user.id)
+
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
+/* ── IPC: DESHABILITAR USUARIO ──────────────────────────── */
+ipcMain.handle('disable-user', async (_, userId) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Credenciales no configuradas.' }
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    await admin.auth.admin.updateUserById(userId, { ban_duration: '876600h' })
+    await admin.from('profiles').update({ activo: false }).eq('id', userId)
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
+/* ── AUTO-UPDATER ───────────────────────────────────────── */
+function setupUpdater() {
+  if (isDev) return  // No buscar actualizaciones en modo desarrollo
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Nueva versión disponible',
+      message: `LabStock v${info.version} está disponible`,
+      detail: 'Se descargará en segundo plano. Te avisamos cuando esté lista para instalar.',
+      buttons: ['Descargar ahora', 'Después'],
+      defaultId: 0,
+      icon: ICON_PATH,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.downloadUpdate()
+    })
+  })
+
+  autoUpdater.on('download-progress', ({ percent }) => {
+    const p = Math.round(percent)
+    if (mainWindow) mainWindow.setProgressBar(p / 100)
+    if (tray) tray.setToolTip(`LabStock — Descargando actualización ${p}%`)
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    if (mainWindow) mainWindow.setProgressBar(-1)
+    if (tray) tray.setToolTip('LabStock — Actualización lista')
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Actualización lista',
+      message: '¡Nueva versión descargada!',
+      detail: 'La aplicación se reiniciará para instalar la actualización.',
+      buttons: ['Reiniciar ahora', 'Más tarde'],
+      defaultId: 0,
+      icon: ICON_PATH,
+    }).then(({ response }) => {
+      if (response === 0) {
+        app.isQuitting = true
+        autoUpdater.quitAndInstall()
+      }
+    })
+  })
+
+  autoUpdater.on('error', () => {
+    // Falla silenciosamente — sin internet es normal
+    if (mainWindow) mainWindow.setProgressBar(-1)
+  })
+
+  // Revisar 3 segundos después de que la ventana esté lista
+  setTimeout(() => autoUpdater.checkForUpdates(), 3000)
+}
+
+/* ── INICIO ─────────────────────────────────────────────── */
+app.whenReady().then(() => {
+  createWindow()
+  createTray()
+  setupUpdater()
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' && !tray) app.quit()
+})
+
+app.on('activate', () => {
+  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+})
+
+app.on('before-quit', () => { app.isQuitting = true })

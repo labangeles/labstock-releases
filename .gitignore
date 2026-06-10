@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Archivos de build
+dist/
+dist-electron/
+
+# Variables de entorno — NUNCA subir al repositorio
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.suo
+*.user
