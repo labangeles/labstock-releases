@@ -10,8 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   // Archivos nativos (exportar / importar)
   saveFile: (data) => ipcRenderer.invoke('save-file', data),
+  saveXlsx: (data) => ipcRenderer.invoke('save-xlsx', data),
   openFile: () => ipcRenderer.invoke('open-file'),
   // Gestión de usuarios (admin, usa service role en main process)
-  createUser: (data) => ipcRenderer.invoke('create-user', data),
+  createUser:  (data)   => ipcRenderer.invoke('create-user',  data),
+  updateUser:  (data)   => ipcRenderer.invoke('update-user',  data),
   disableUser: (userId) => ipcRenderer.invoke('disable-user', userId),
 })

@@ -4,7 +4,6 @@ const {
   app, BrowserWindow, Tray, Menu, nativeImage,
   ipcMain, Notification, dialog,
 } = require('electron')
-const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs   = require('fs')
 const isDev = !app.isPackaged
@@ -80,6 +79,18 @@ function createWindow() {
       label: 'Ayuda',
       submenu: [
         {
+          label: 'Buscar actualizaciones',
+          click: () => {
+            if (isDev) {
+              dialog.showMessageBox(mainWindow, { type:'info', title:'LabStock', message:'Las actualizaciones no están disponibles en modo desarrollo.', buttons:['OK'] })
+              return
+            }
+            mainWindow._manualCheck = true
+            autoUpdater.checkForUpdates()
+          },
+        },
+        { type: 'separator' },
+        {
           label: 'Acerca de LabStock',
           click: () => {
             dialog.showMessageBox(mainWindow, {
@@ -142,6 +153,18 @@ ipcMain.handle('save-file', async (_, { defaultPath, content }) => {
   return { filePath }
 })
 
+/* ── IPC: EXPORTAR XLSX (diálogo nativo, datos en base64) ── */
+ipcMain.handle('save-xlsx', async (_, { defaultPath, data }) => {
+  const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+    defaultPath,
+    filters: [{ name: 'Excel', extensions: ['xlsx'] }],
+  })
+  if (canceled || !filePath) return { canceled: true }
+  const buffer = Buffer.from(data, 'base64')
+  fs.writeFileSync(filePath, buffer)
+  return { filePath }
+})
+
 /* ── IPC: IMPORTAR ARCHIVO (diálogo nativo) ─────────────── */
 ipcMain.handle('open-file', async () => {
   const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
@@ -154,7 +177,7 @@ ipcMain.handle('open-file', async () => {
 })
 
 /* ── IPC: CREAR USUARIO (service role — solo main process) ─ */
-ipcMain.handle('create-user', async (_, { email, password, nombre, rol, sedeId }) => {
+ipcMain.handle('create-user', async (_, { email, password, nombre, rol, sedeId, permisos }) => {
   const supabaseUrl = process.env.VITE_SUPABASE_URL
   const serviceKey  = process.env.SUPABASE_SERVICE_KEY
   if (!supabaseUrl || !serviceKey) return { error: 'Credenciales de Supabase no configuradas.' }
@@ -173,13 +196,38 @@ ipcMain.handle('create-user', async (_, { email, password, nombre, rol, sedeId }
     })
     if (authErr) return { error: authErr.message }
 
-    // Actualizar perfil con sede_id correcta (el trigger ya crea la fila base)
-    await admin.from('profiles').update({
+    // Actualizar perfil con sede_id, rol y permisos (el trigger ya crea la fila base)
+    const profileUpdate = { nombre, rol, sede_id: sedeId || null }
+    if (permisos) profileUpdate.permisos = permisos
+    await admin.from('profiles').update(profileUpdate).eq('id', data.user.id)
+
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
+/* ── IPC: ACTUALIZAR USUARIO (rol, permisos, sede) ──────── */
+ipcMain.handle('update-user', async (_, { userId, nombre, rol, sedeId, permisos }) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Credenciales de Supabase no configuradas.' }
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    await admin.auth.admin.updateUserById(userId, {
+      user_metadata: { nombre, rol, sede_id: sedeId || '' },
+    })
+    const profileUpdate = {
       nombre,
       rol,
       sede_id: sedeId || null,
-    }).eq('id', data.user.id)
-
+      permisos: permisos || { bodega: true, caja: false },
+    }
+    const { error } = await admin.from('profiles').update(profileUpdate).eq('id', userId)
+    if (error) return { error: error.message }
     return { success: true }
   } catch (e) {
     return { error: e.message }
@@ -208,6 +256,7 @@ ipcMain.handle('disable-user', async (_, userId) => {
 function setupUpdater() {
   if (isDev) return  // No buscar actualizaciones en modo desarrollo
 
+  const { autoUpdater } = require('electron-updater')
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
@@ -250,9 +299,25 @@ function setupUpdater() {
     })
   })
 
-  autoUpdater.on('error', () => {
-    // Falla silenciosamente — sin internet es normal
+  autoUpdater.on('update-not-available', () => {
+    if (mainWindow?._manualCheck) {
+      mainWindow._manualCheck = false
+      dialog.showMessageBox(mainWindow, {
+        type: 'info', title: 'LabStock actualizado',
+        message: 'Ya tienes la versión más reciente instalada.',
+        buttons: ['OK'], icon: ICON_PATH,
+      })
+    }
+  })
+
+  autoUpdater.on('error', (err) => {
     if (mainWindow) mainWindow.setProgressBar(-1)
+    const msg = err?.message || 'Error desconocido'
+    dialog.showMessageBox(mainWindow, {
+      type: 'error', title: 'Error de actualización',
+      message: 'No se pudo verificar actualizaciones',
+      detail: msg, buttons: ['OK'], icon: ICON_PATH,
+    })
   })
 
   // Revisar 3 segundos después de que la ventana esté lista

@@ -2,42 +2,14 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import logoTeal from "./assets/logo-icon-teal.png";
 import { supabase } from "./lib/supabase";
 import { useAuth } from "./contexts/AuthContext";
-
-/* ── TOKENS ─────────────────────────────────────────────── */
-const T = {
-  teal:'#2BBFBE', tealDk:'#1A9696', tealXL:'#EAF8F8', tealL:'#B8E8E8',
-  canvas:'#EDF2F4', surface:'#FFFFFF',
-  hi:'#152028', mid:'#50606C', lo:'#8899A4',
-  border:'#DCE8EC', borderMd:'#C4D8DC',
-  ok:'#12A050', okBg:'#DDFAEC',
-  warn:'#B07400', warnBg:'#FFF0D0',
-  crit:'#D41E1E', critBg:'#FFEAEA',
-  out:'#6C7C88', outBg:'#EEF2F4',
-};
-
-/* ── ICONS ───────────────────────────────────────────────── */
-const Ico = {
-  Home: ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>),
-  Box:  ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27,6.96 12,12.01 20.73,6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>),
-  Bell: ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>),
-  Activity: ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/></svg>),
-  Users: ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>),
-  Search: ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>),
-  Plus:   ({s=16,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>),
-  File:   ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>),
-  Warn:   ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m10.29 3.86-8.66 15A1 1 0 0 0 2.5 20.5h19a1 1 0 0 0 .87-1.5l-8.66-15a1 1 0 0 0-1.74 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>),
-  Check:  ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>),
-  XCircle:({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>),
-  XClose: ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>),
-  Edit:   ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>),
-  Trash:  ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>),
-  Copy:   ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>),
-  Sliders:({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>),
-  Upload: ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>),
-  Download:({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="8,17 12,21 16,17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"/></svg>),
-  LogOut: ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>),
-  Map:    ({s=14,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1,6 1,22 8,18 16,22 23,18 23,2 16,6 8,2"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>),
-};
+import { T, Ico, Btn, IconBtn, Modal, Field, TInput, TSelect, StatCard } from "./shared/ui";
+import { CajaScreen } from "./features/caja/CajaScreen";
+import { HistorialCajaScreen } from "./features/caja/HistorialCajaScreen";
+import { AuditorDashboard } from "./features/caja/AuditorDashboard";
+import { ComprasScreen } from "./features/compras/ComprasScreen";
+import { GastosFijosScreen } from "./features/admin/GastosFijosScreen";
+import { AnalisisFinancieroScreen } from "./features/admin/AnalisisFinancieroScreen";
+import { InicioScreen } from "./features/inicio/InicioScreen";
 
 /* ── DATOS ───────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -69,16 +41,48 @@ const fmt = iso => iso
   : "—";
 
 /* ── DB HELPERS ──────────────────────────────────────────── */
+const CAT_PREFIX = {
+  "Reactivos":"REA", "Consumibles desechables":"CON", "Material de vidrio":"VID",
+  "Controles y calibradores":"CAL", "Equipos y accesorios":"EQU",
+  "Papelería y formularios":"PAP", "Soluciones y buffer":"SOL", "Otros":"OTR",
+};
+
 const fromDB = r => ({
-  id: r.id, name: r.nombre, category: r.categoria, unit: r.unidad,
+  id: r.id, code: r.codigo||'', name: r.nombre, category: r.categoria, unit: r.unidad,
   current: r.cantidad_actual, minimum: r.cantidad_minima, maximum: r.cantidad_maxima,
   lastUpdated: r.updated_at, sede_id: r.sede_id,
 });
 const toDB = (item, sedeId, userId) => ({
-  nombre: item.name.trim(), categoria: item.category, unidad: item.unit,
+  codigo: item.code||null, nombre: item.name.trim(), categoria: item.category, unidad: item.unit,
   cantidad_actual: Number(item.current), cantidad_minima: Number(item.minimum),
   cantidad_maxima: Number(item.maximum), sede_id: sedeId, created_by: userId,
 });
+
+/* ── PEDIDOS ─────────────────────────────────────────────── */
+const SANTA_LUCIA_NAME = 'Santa Lucía';
+const ORDER_STATUS = {
+  pendiente:  { label:'Pendiente',   c:'#B07400', bg:'#FFF0D0' },
+  en_proceso: { label:'En proceso',  c:'#1D4ED8', bg:'#EEF2FF' },
+  enviado:    { label:'Enviado',     c:'#7C3AED', bg:'#F5F3FF' },
+  recibido:   { label:'Recibido',    c:T.ok,      bg:T.okBg    },
+  cancelado:  { label:'Cancelado',   c:T.lo,      bg:T.outBg   },
+};
+
+async function generateOrderRef() {
+  const {data}=await supabase.from('pedidos').select('referencia').like('referencia','PED-%');
+  let max=0;
+  (data||[]).forEach(r=>{
+    const n=parseInt(r.referencia?.split('-')[1]||'0');
+    if(!isNaN(n)&&n>max) max=n;
+  });
+  return `PED-${String(max+1).padStart(4,'0')}`;
+}
+
+async function generateCode(category) {
+  const prefix = CAT_PREFIX[category] || 'OTR';
+  const { data } = await supabase.rpc('next_item_code', { cat_prefix: prefix });
+  return data || `${prefix}-0001`;
+}
 
 const logAct = (sedeId, sedeName, itemId, itemName, userId, userName, accion, qA, qN, nota) =>
   supabase.from('actividad').insert({
@@ -92,11 +96,11 @@ const logAct = (sedeId, sedeName, itemId, itemName, userId, userName, accion, qA
 // ﻿ = BOM UTF-8: le dice a Excel que abra el archivo en UTF-8 y separe por comas
 const BOM = '﻿';
 const CSV_SEP = 'sep=,';
-const CSV_COLS = 'nombre,categoria,unidad,cantidad_actual,cantidad_minima,cantidad_maxima';
+const CSV_COLS = 'codigo,nombre,categoria,unidad,cantidad_actual,cantidad_minima,cantidad_maxima';
 
 function itemsToCSV(items) {
   const rows = items.map(i =>
-    `"${i.name}","${i.category}","${i.unit}",${i.current},${i.minimum},${i.maximum}`
+    `"${i.code||''}","${i.name}","${i.category}","${i.unit}",${i.current},${i.minimum},${i.maximum}`
   );
   return `${BOM}${CSV_SEP}\n${CSV_COLS}\n${rows.join('\n')}`;
 }
@@ -137,20 +141,6 @@ function StatusBadge({status}) {
   );
 }
 
-function StatCard({icon,value,label,accent}) {
-  const [hov,setHov]=useState(false);
-  return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{flex:1,background:T.surface,borderRadius:14,
-        border:`1px solid ${hov?T.tealL:T.border}`,padding:'20px 22px',
-        display:'flex',flexDirection:'column',gap:10,transition:'all 0.15s',
-        boxShadow:hov?'0 4px 20px rgba(43,191,190,0.10)':'none'}}>
-      <div style={{color:accent,opacity:0.85}}>{icon}</div>
-      <div style={{fontSize:38,fontWeight:700,color:accent,lineHeight:1,letterSpacing:'-0.03em'}}>{value}</div>
-      <div style={{fontSize:12,color:T.mid,fontWeight:500}}>{label}</div>
-    </div>
-  );
-}
 
 function TitleBar({profile, sedeName, onSignOut}) {
   return (
@@ -202,15 +192,52 @@ function NavBtn({id,label,Icon,badge,active,onNav}) {
   );
 }
 
-function Sidebar({view,onNav,alertCount,profile,sedes,selectedSede,onSedeChange}) {
-  const isAdmin = profile?.rol==='admin';
-  const nav = [
-    {id:'inicio',     label:'Inicio',     Icon:Ico.Home},
+function SectionLabel({label}) {
+  return (
+    <div style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',
+      letterSpacing:'0.08em',padding:'12px 10px 5px'}}>
+      {label}
+    </div>
+  );
+}
+
+function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,onSedeChange}) {
+  const isAdmin      = profile?.rol==='admin';
+  const isAuditor    = profile?.rol==='auditor';
+  const isTecnico    = profile?.rol==='tecnico';
+  const isSecretaria = profile?.rol==='secretaria';
+  const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
+  const bodegaPerm   = isAdmin || (isTecnico && profile?.permisos?.bodega!==false);
+  const compraPerm   = isAdmin || isAuditor || isSecretaria;
+
+  const navBodega = bodegaPerm && !isAuditor ? [
+    {id:'resumen',    label:'Resumen',    Icon:Ico.Layers},
     {id:'inventario', label:'Inventario', Icon:Ico.Box},
-    {id:'alertas',    label:'Alertas',    Icon:Ico.Bell, badge:alertCount},
+    {id:'alertas',    label:'Alertas',    Icon:Ico.Bell,  badge:alertCount},
+    {id:'pedidos',    label:'Pedidos',    Icon:Ico.Cart,  badge:pedidosBadge},
     {id:'actividad',  label:'Registro',   Icon:Ico.Activity},
-    ...(isAdmin?[{id:'usuarios',label:'Usuarios',Icon:Ico.Users}]:[]),
-  ];
+  ] : isSecretaria ? [
+    {id:'inventario', label:'Inventario', Icon:Ico.Box},
+  ] : [];
+
+  const navAdmin = isAdmin ? [
+    {id:'usuarios',    label:'Usuarios',            Icon:Ico.Users},
+    {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
+    {id:'analisis',    label:'Análisis Financiero', Icon:Ico.TrendingUp},
+  ] : isAuditor ? [
+    {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
+  ] : [];
+
+  const navCaja = cajaPerm ? [
+    ...(!isAuditor ? [{id:'caja_dia', label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
+    ...(isAuditor  ? [{id:'auditoria', label:'Resumen', Icon:Ico.BarChart}] : []),
+    {id:'caja_historial', label:'Historial', Icon:Ico.History},
+  ] : [];
+
+  const navCompras = compraPerm ? [
+    {id:'compras', label:'Registro de Compras', Icon:Ico.Receipt},
+  ] : [];
+
   return (
     <aside style={{width:214,flexShrink:0,background:T.surface,
       borderRight:`1px solid ${T.border}`,display:'flex',flexDirection:'column'}}>
@@ -224,9 +251,9 @@ function Sidebar({view,onNav,alertCount,profile,sedes,selectedSede,onSedeChange}
         </div>
       </div>
 
-      {/* Selector de sede para admin */}
+      {/* Selector de sede — solo admin (no auditor) */}
       {isAdmin && sedes.length>0 && (
-        <div style={{padding:'10px 12px 0',borderBottom:`1px solid ${T.border}`,paddingBottom:10}}>
+        <div style={{padding:'10px 12px',borderBottom:`1px solid ${T.border}`}}>
           <div style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',
             letterSpacing:'0.07em',marginBottom:5}}>Sede</div>
           <select value={selectedSede||''} onChange={e=>onSedeChange(e.target.value||null)}
@@ -238,124 +265,79 @@ function Sidebar({view,onNav,alertCount,profile,sedes,selectedSede,onSedeChange}
         </div>
       )}
 
-      <nav style={{flex:1,padding:'10px 8px'}}>
-        <div style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',
-          letterSpacing:'0.08em',padding:'4px 10px 6px'}}>Módulos</div>
-        {nav.map(({id,label,Icon,badge})=>(
-          <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
-            active={view===id} onNav={onNav}/>
-        ))}
+      <nav style={{flex:1,padding:'4px 8px',overflowY:'auto'}}>
+        <NavBtn id="inicio" label="Inicio" Icon={Ico.Home} badge={0}
+          active={view==='inicio'} onNav={onNav}/>
+        {navBodega.length>0 && (
+          <>
+            <SectionLabel label="Bodega"/>
+            {navBodega.map(({id,label,Icon,badge})=>(
+              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
+                active={view===id} onNav={onNav}/>
+            ))}
+          </>
+        )}
+        {navCaja.length>0 && (
+          <>
+            <SectionLabel label={isAuditor ? 'Auditoría' : 'Caja'}/>
+            {navCaja.map(({id,label,Icon,badge})=>(
+              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
+                active={view===id} onNav={onNav}/>
+            ))}
+          </>
+        )}
+        {navCompras.length>0 && (
+          <>
+            <SectionLabel label="Compras"/>
+            {navCompras.map(({id,label,Icon,badge})=>(
+              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
+                active={view===id} onNav={onNav}/>
+            ))}
+          </>
+        )}
+        {navAdmin.length>0 && (
+          <>
+            <SectionLabel label="Administración"/>
+            {navAdmin.map(({id,label,Icon,badge})=>(
+              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
+                active={view===id} onNav={onNav}/>
+            ))}
+          </>
+        )}
       </nav>
 
       <div style={{padding:'10px 16px 14px',borderTop:`1px solid ${T.border}`}}>
         <div style={{fontSize:11.5,fontWeight:600,color:T.mid,marginBottom:2}}>{profile?.nombre}</div>
         <div style={{fontSize:10.5,color:T.lo}}>
-          {profile?.rol==='admin' ? '⚑ Administrador' : profile?.sedes?.nombre || 'Técnico'}
+          {isAdmin ? '⚑ Administrador' : isAuditor ? '◎ Auditor' : isSecretaria ? '✦ Secretaria' : profile?.sedes?.nombre || 'Técnico'}
         </div>
+      </div>
+
+      {/* Sello de desarrollo */}
+      <div style={{
+        padding:'7px 16px 10px',
+        borderTop:`1px solid ${T.border}`,
+        display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+      }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+          stroke={T.lo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.5">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span style={{fontSize:9.5, color:T.lo, opacity:0.55, letterSpacing:'0.04em'}}>
+          Desarrollado por
+        </span>
+        <span style={{
+          fontSize:9.5, fontWeight:700, letterSpacing:'0.06em',
+          color: T.tealDk, opacity:0.7,
+        }}>
+          TELOXIS
+        </span>
       </div>
     </aside>
   );
 }
 
-function Btn({children,variant='primary',icon,onClick,size='md',disabled,full,style:ext}) {
-  const [hov,setHov]=useState(false);
-  const sz={sm:{padding:'5px 12px',fontSize:12},md:{padding:'8px 16px',fontSize:13.5},lg:{padding:'10px 22px',fontSize:14.5}};
-  const vs={
-    primary: {bg:hov&&!disabled?T.tealDk:T.teal,color:'#fff',border:'none'},
-    secondary:{bg:hov&&!disabled?T.border:T.canvas,color:T.mid,border:`1px solid ${T.border}`},
-    ghost:   {bg:hov&&!disabled?T.tealXL:'transparent',color:hov&&!disabled?T.tealDk:T.mid,border:'none'},
-    danger:  {bg:hov&&!disabled?'#FCD0D0':T.critBg,color:T.crit,border:'1px solid #F8C8C8'},
-    success: {bg:'#DDFAEC',color:T.ok,border:'none'},
-  };
-  const v=vs[variant]||vs.primary;
-  return (
-    <button onMouseEnter={()=>!disabled&&setHov(true)} onMouseLeave={()=>setHov(false)}
-      onClick={disabled?undefined:onClick} disabled={disabled}
-      style={{display:'inline-flex',alignItems:'center',gap:6,
-        justifyContent:full?'center':undefined,width:full?'100%':undefined,
-        border:v.border,cursor:disabled?'not-allowed':'pointer',fontFamily:'inherit',fontWeight:500,
-        borderRadius:8,transition:'all 0.12s',background:v.bg,color:v.color,
-        opacity:disabled?0.45:1,...sz[size],...ext}}>
-      {icon}{children}
-    </button>
-  );
-}
 
-function IconBtn({icon,onClick,danger}) {
-  const [hov,setHov]=useState(false);
-  return (
-    <button onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{background:hov?(danger?T.critBg:T.tealXL):'transparent',border:'none',cursor:'pointer',
-        padding:6,borderRadius:6,color:hov?(danger?T.crit:T.tealDk):T.lo,
-        display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.1s'}}>
-      {icon}
-    </button>
-  );
-}
-
-function Modal({open,onClose,title,children,maxWidth=460}) {
-  if (!open) return null;
-  return (
-    <div style={{position:'fixed',inset:0,background:'rgba(10,20,28,0.45)',
-      display:'flex',alignItems:'center',justifyContent:'center',
-      zIndex:200,backdropFilter:'blur(2px)',padding:16,WebkitAppRegion:'no-drag'}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:T.surface,borderRadius:14,width:'100%',maxWidth,
-        maxHeight:'92vh',overflowY:'auto',WebkitAppRegion:'no-drag',
-        boxShadow:'0 20px 60px rgba(0,0,0,0.25)',border:`1px solid ${T.border}`}}>
-        <div style={{padding:'18px 22px',borderBottom:`1px solid ${T.border}`,
-          display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontSize:14,fontWeight:600,color:T.hi}}>{title}</span>
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',
-            color:T.lo,padding:4,borderRadius:6,display:'flex'}}>
-            <Ico.XClose/>
-          </button>
-        </div>
-        <div style={{padding:'20px 22px'}}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function Field({label,error,hint,children}) {
-  return (
-    <div style={{marginBottom:14}}>
-      <label style={{display:'block',fontSize:12,fontWeight:600,color:T.mid,marginBottom:5}}>{label}</label>
-      {children}
-      {error&&<p style={{fontSize:11,color:T.crit,margin:'3px 0 0'}}>{error}</p>}
-      {hint&&!error&&<p style={{fontSize:11,color:T.lo,margin:'3px 0 0'}}>{hint}</p>}
-    </div>
-  );
-}
-
-/* TInput sin autoFocus nativo — usa ref con setTimeout para evitar bug Electron */
-function TInput({value,onChange,placeholder,type='text',min,max,focusOnMount}) {
-  const [foc,setFoc]=useState(false);
-  const ref=useRef(null);
-  useEffect(()=>{
-    if(focusOnMount){ const t=setTimeout(()=>ref.current?.focus(),80); return ()=>clearTimeout(t); }
-  },[focusOnMount]);
-  return (
-    <input ref={ref} type={type} value={value} onChange={onChange}
-      placeholder={placeholder} min={min} max={max}
-      onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-      style={{width:'100%',padding:'8px 11px',border:`1px solid ${foc?T.teal:T.border}`,
-        borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
-        outline:'none',transition:'border-color 0.12s',boxSizing:'border-box'}}/>
-  );
-}
-
-function TSelect({value,onChange,options}) {
-  const [foc,setFoc]=useState(false);
-  return (
-    <select value={value} onChange={onChange} onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-      style={{width:'100%',padding:'8px 11px',border:`1px solid ${foc?T.teal:T.border}`,
-        borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
-        outline:'none',transition:'border-color 0.12s',boxSizing:'border-box',cursor:'pointer'}}>
-      {options.map(o=><option key={o}>{o}</option>)}
-    </select>
-  );
-}
 
 function Meter({current,minimum,maximum,status}) {
   const pct=Math.min(100,Math.max(0,(current/maximum)*100));
@@ -405,6 +387,17 @@ function ItemFormModal({initial,onSave,onClose,sedes=[],initialSedeId=null}) {
             {sedes.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </Field>
+      )}
+      {/* Código — solo lectura al editar, oculto al agregar (se genera al guardar) */}
+      {initial?.code&&(
+        <div style={{background:'#F0FAFA',border:`1px solid ${T.tealL}`,borderRadius:8,
+          padding:'8px 12px',marginBottom:14,display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:10.5,fontWeight:700,color:T.lo,textTransform:'uppercase',
+            letterSpacing:'0.06em'}}>Código</span>
+          <span style={{fontFamily:'monospace',fontSize:14,fontWeight:700,color:T.tealDk,
+            letterSpacing:'0.05em'}}>{initial.code}</span>
+          <span style={{fontSize:11,color:T.lo,marginLeft:'auto'}}>No se puede modificar</span>
+        </div>
       )}
       <Field label="Nombre del insumo" error={err.name}>
         <TInput value={f.name} onChange={e=>set("name",e.target.value)}
@@ -687,7 +680,7 @@ function ImportModal({onImport,onClose}) {
 /* ═══════════════════════════════════════════════════════════
    PANTALLA: INICIO
 ═══════════════════════════════════════════════════════════ */
-function InicioScreen({items,onGoAlerts,onReport,sedeName,isAdmin,sedes,itemsBySede}) {
+function ResumenBodegaScreen({items,onGoAlerts,onReport,sedeName,isAdmin,sedes,itemsBySede}) {
   const counts={
     ok:items.filter(i=>getStatus(i)==="ok").length,
     warn:items.filter(i=>getStatus(i)==="warn").length,
@@ -807,7 +800,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
         </div>
         <div style={{display:'flex',gap:8}}>
           <Btn variant="secondary" size="sm" icon={<Ico.Download s={13}/>} onClick={onExport}>Exportar</Btn>
-          <Btn variant="secondary" size="sm" icon={<Ico.Upload s={13}/>} onClick={onImport}>Importar</Btn>
+          {canEdit&&<Btn variant="secondary" size="sm" icon={<Ico.Upload s={13}/>} onClick={onImport}>Importar</Btn>}
           {canEdit&&<Btn icon={<Ico.Plus s={14}/>} onClick={onAdd}>Agregar insumo</Btn>}
         </div>
       </div>
@@ -841,9 +834,9 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
       </div>
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-        <div style={{display:'grid',gridTemplateColumns:'2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
+        <div style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
           padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
-          {['Insumo','Categoría','Stock','Mín.','Estado',''].map((h,i)=>(
+          {['Código','Insumo','Categoría','Stock','Mín.','Estado',''].map((h,i)=>(
             <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,
               textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
           ))}
@@ -858,11 +851,15 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
           const low=item.current<=item.minimum;
           return (
             <div key={item.id}
-              style={{display:'grid',gridTemplateColumns:'2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
+              style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
                 padding:'12px 18px',alignItems:'center',
                 borderBottom:i<filtered.length-1?`1px solid ${T.border}`:'none',transition:'background 0.1s'}}
               onMouseEnter={e=>e.currentTarget.style.background='#F5F9FB'}
               onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              <span style={{fontFamily:'monospace',fontSize:11.5,fontWeight:700,
+                color:item.code?T.tealDk:T.border,letterSpacing:'0.04em'}}>
+                {item.code||'—'}
+              </span>
               <div>
                 <div style={{fontSize:13,fontWeight:500,color:T.hi}}>{item.name}</div>
                 {item.lastUpdated&&(
@@ -876,7 +873,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
               <span style={{fontSize:12.5,color:T.mid}}>{item.minimum}</span>
               <StatusBadge status={st}/>
               <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
-                <IconBtn icon={<Ico.Sliders s={13}/>} onClick={()=>onUpdate(item)}/>
+                {canEdit&&<IconBtn icon={<Ico.Sliders s={13}/>} onClick={()=>onUpdate(item)}/>}
                 {canEdit&&<IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>onEdit(item)}/>}
                 {canEdit&&<IconBtn icon={<Ico.Trash s={13}/>} danger onClick={()=>onDelete(item)}/>}
               </div>
@@ -1060,13 +1057,16 @@ function ActividadScreen({sedeId,isAdmin}) {
    PANTALLA: GESTIÓN DE USUARIOS (solo admin)
 ═══════════════════════════════════════════════════════════ */
 function UsuariosScreen({sedes}) {
-  const [users,setUsers]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [modal,setModal]=useState(false);
-  const [toast,setToast]=useState('');
-  const [form,setForm]=useState({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:''});
-  const [saving,setSaving]=useState(false);
-  const [err,setErr]=useState('');
+  const [users,setUsers]     = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [modal,setModal]     = useState(false);
+  const [editModal,setEditModal] = useState(null); // user object or null
+  const [toast,setToast]     = useState('');
+  const [form,setForm]       = useState({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
+  const [editForm,setEditForm] = useState({nombre:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
+  const [saving,setSaving]   = useState(false);
+  const [err,setErr]         = useState('');
+  const [editErr,setEditErr] = useState('');
 
   const load=()=>{
     supabase.from('profiles').select('*,sedes(nombre)').order('created_at')
@@ -1075,6 +1075,18 @@ function UsuariosScreen({sedes}) {
   useEffect(()=>load(),[]);
 
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),3000);};
+
+  const openEdit=(u)=>{
+    setEditErr('');
+    setEditForm({
+      nombre:    u.nombre||'',
+      rol:       u.rol||'tecnico',
+      sedeId:    u.sede_id||'',
+      permBodega: u.permisos?.bodega!==false,
+      permCaja:   u.permisos?.caja===true,
+    });
+    setEditModal(u);
+  };
 
   const create=async()=>{
     setErr('');
@@ -1085,19 +1097,50 @@ function UsuariosScreen({sedes}) {
       setErr('El código solo puede tener letras, números, puntos y guiones.'); return;
     }
     if(form.password.length<6){setErr('La contraseña debe tener al menos 6 caracteres.'); return;}
-    if(form.rol==='tecnico'&&!form.sedeId){setErr('Selecciona la sede del técnico.'); return;}
+    if((form.rol==='tecnico'||form.rol==='secretaria')&&!form.sedeId){setErr('Selecciona la sede asignada.'); return;}
     setSaving(true);
     const emailInterno=form.codigo.trim().toLowerCase()+'@labstock.gt';
+    const permisos=form.rol==='tecnico'
+      ?{bodega:form.permBodega,caja:form.permCaja}
+      :form.rol==='secretaria'
+      ?{caja:form.permCaja}
+      :null;
     const r=await window.electronAPI?.createUser({
       email:emailInterno, password:form.password, nombre:form.nombre,
-      rol:form.rol, sedeId:form.rol==='admin'?null:form.sedeId,
+      rol:form.rol,
+      sedeId:(form.rol==='tecnico'||form.rol==='secretaria')?form.sedeId:null,
+      permisos,
     });
     setSaving(false);
     if(r?.error){setErr(r.error);return;}
     setModal(false);
-    setForm({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:''});
+    setForm({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
     load();
     showToast('✅ Usuario creado correctamente');
+  };
+
+  const update=async()=>{
+    setEditErr('');
+    if(!editForm.nombre.trim()){setEditErr('El nombre es obligatorio.');return;}
+    if((editForm.rol==='tecnico'||editForm.rol==='secretaria')&&!editForm.sedeId){setEditErr('Selecciona la sede asignada.');return;}
+    setSaving(true);
+    const permisos=editForm.rol==='tecnico'
+      ?{bodega:editForm.permBodega,caja:editForm.permCaja}
+      :editForm.rol==='secretaria'
+      ?{caja:editForm.permCaja}
+      :null;
+    const r=await window.electronAPI?.updateUser({
+      userId:  editModal.id,
+      nombre:  editForm.nombre,
+      rol:     editForm.rol,
+      sedeId:  (editForm.rol==='tecnico'||editForm.rol==='secretaria')?editForm.sedeId:null,
+      permisos,
+    });
+    setSaving(false);
+    if(r?.error){setEditErr(r.error);return;}
+    setEditModal(null);
+    load();
+    showToast('✅ Usuario actualizado');
   };
 
   const disable=async(u)=>{
@@ -1109,9 +1152,33 @@ function UsuariosScreen({sedes}) {
   };
 
   const rolBadge=rol=>({
-    admin:{bg:'#EEF2FF',c:'#3730A3',label:'Admin'},
-    tecnico:{bg:T.tealXL,c:T.tealDk,label:'Técnico'},
+    admin:     {bg:'#EEF2FF',c:'#3730A3',label:'Admin'},
+    tecnico:   {bg:T.tealXL, c:T.tealDk, label:'Técnico'},
+    auditor:   {bg:'#F0FDF4',c:'#15803D', label:'Auditor'},
+    secretaria:{bg:'#FDF4FF',c:'#7E22CE', label:'Secretaria'},
   }[rol]||{bg:T.canvas,c:T.mid,label:rol});
+
+  const RolInfo = ({rol}) => {
+    if(rol==='auditor') return (
+      <div style={{background:'#F0FDF4',border:'1px solid #86EFAC',borderRadius:8,
+        padding:'9px 12px',fontSize:12.5,color:'#15803D',marginBottom:6}}>
+        El auditor tiene acceso de solo lectura al módulo de Caja y Compras en todas las sedes.
+      </div>
+    );
+    if(rol==='admin') return (
+      <div style={{background:'#EEF2FF',border:'1px solid #A5B4FC',borderRadius:8,
+        padding:'9px 12px',fontSize:12.5,color:'#3730A3',marginBottom:6}}>
+        El administrador tiene acceso completo a todas las sedes y módulos.
+      </div>
+    );
+    if(rol==='secretaria') return (
+      <div style={{background:'#FDF4FF',border:'1px solid #E9D5FF',borderRadius:8,
+        padding:'9px 12px',fontSize:12.5,color:'#7E22CE',marginBottom:6}}>
+        La secretaria registra facturas de compras. Solo disponible en sedes habilitadas (La Gomera y Santa Lucía). El acceso a Caja es opcional.
+      </div>
+    );
+    return null;
+  };
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:18}}>
@@ -1129,7 +1196,7 @@ function UsuariosScreen({sedes}) {
       </div>
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 80px 1fr 60px',
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 80px 1fr 72px',
           padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
           {['Nombre','Código acceso','Rol','Sede',''].map((h,i)=>(
             <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
@@ -1141,7 +1208,7 @@ function UsuariosScreen({sedes}) {
           const rb=rolBadge(u.rol);
           return (
             <div key={u.id}
-              style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 80px 1fr 60px',
+              style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 80px 1fr 72px',
                 padding:'12px 18px',alignItems:'center',
                 borderBottom:i<users.length-1?`1px solid ${T.border}`:'none',
                 opacity:u.activo?1:0.45}}>
@@ -1150,7 +1217,10 @@ function UsuariosScreen({sedes}) {
               <span style={{display:'inline-flex',alignItems:'center',padding:'2px 8px',
                 borderRadius:20,background:rb.bg,color:rb.c,fontSize:11,fontWeight:600}}>{rb.label}</span>
               <span style={{fontSize:12,color:T.mid}}>{u.sedes?.nombre||'—'}</span>
-              <div style={{display:'flex',justifyContent:'flex-end'}}>
+              <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
+                {u.activo&&(
+                  <IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>openEdit(u)} title="Editar rol y permisos"/>
+                )}
                 {u.activo&&(
                   <IconBtn icon={<Ico.Trash s={13}/>} danger onClick={()=>disable(u)}/>
                 )}
@@ -1160,6 +1230,7 @@ function UsuariosScreen({sedes}) {
         })}
       </div>
 
+      {/* Modal: Crear usuario */}
       <Modal open={modal} onClose={()=>{setModal(false);setErr('');}} title="Crear usuario" maxWidth={420}>
         <Field label="Nombre completo">
           <TInput value={form.nombre} onChange={e=>setForm(f=>({...f,nombre:e.target.value}))}
@@ -1175,23 +1246,59 @@ function UsuariosScreen({sedes}) {
         </Field>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
           <Field label="Rol">
-            <TSelect value={form.rol} onChange={e=>setForm(f=>({...f,rol:e.target.value,sedeId:''}))}
-              options={['tecnico','admin']}/>
+            <TSelect value={form.rol}
+              onChange={e=>setForm(f=>({...f,rol:e.target.value,sedeId:'',permBodega:true,permCaja:false}))}
+              options={[
+                {value:'tecnico',    label:'Técnico'},
+                {value:'secretaria', label:'Secretaria'},
+                {value:'admin',      label:'Administrador'},
+                {value:'auditor',    label:'Auditor'},
+              ]}/>
           </Field>
-          {form.rol==='tecnico'&&(
+          {(form.rol==='tecnico'||form.rol==='secretaria')&&(
             <Field label="Sede asignada">
               <select value={form.sedeId} onChange={e=>setForm(f=>({...f,sedeId:e.target.value}))}
                 style={{width:'100%',padding:'8px 11px',border:`1px solid ${T.border}`,borderRadius:8,
                   fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
                   outline:'none',boxSizing:'border-box',cursor:'pointer'}}>
                 <option value="">Seleccionar...</option>
-                {sedes.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                {(form.rol==='secretaria'?sedes.filter(s=>s.permite_compras):sedes)
+                  .map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
               </select>
             </Field>
           )}
         </div>
-        {err&&<div style={{background:T.critBg,borderRadius:8,padding:'10px 12px',
-          fontSize:12.5,color:T.crit,marginBottom:12}}>{err}</div>}
+        {form.rol==='tecnico'&&(
+          <Field label="Permisos de acceso">
+            <div style={{display:'flex',gap:20,padding:'8px 0'}}>
+              {[{key:'permBodega',label:'Acceso a Bodega'},{key:'permCaja',label:'Acceso a Caja'}].map(({key,label})=>(
+                <label key={key} style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                  <input type="checkbox" checked={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.checked}))}
+                    style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                  {label}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
+        {form.rol==='secretaria'&&(
+          <Field label="Permisos adicionales">
+            <div style={{display:'flex',gap:20,padding:'8px 0'}}>
+              <label style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.mid,cursor:'default'}}>
+                <input type="checkbox" checked readOnly disabled
+                  style={{width:15,height:15,accentColor:T.teal,cursor:'default'}}/>
+                Acceso a Compras (siempre activo)
+              </label>
+              <label style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                <input type="checkbox" checked={form.permCaja} onChange={e=>setForm(f=>({...f,permCaja:e.target.checked}))}
+                  style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                Acceso a Caja
+              </label>
+            </div>
+          </Field>
+        )}
+        <RolInfo rol={form.rol}/>
+        {err&&<div style={{background:T.critBg,borderRadius:8,padding:'10px 12px',fontSize:12.5,color:T.crit,marginBottom:12}}>{err}</div>}
         <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
           <Btn variant="secondary" onClick={()=>{setModal(false);setErr('');}}>Cancelar</Btn>
           <Btn onClick={create} disabled={saving} icon={<Ico.Plus s={14}/>}>
@@ -1199,6 +1306,499 @@ function UsuariosScreen({sedes}) {
           </Btn>
         </div>
       </Modal>
+
+      {/* Modal: Editar usuario */}
+      <Modal open={!!editModal} onClose={()=>{setEditModal(null);setEditErr('');}} title="Editar usuario" maxWidth={420}>
+        {editModal&&(
+          <>
+            <div style={{background:T.canvas,borderRadius:8,padding:'8px 12px',marginBottom:14,
+              display:'flex',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:11,color:T.lo}}>Código de acceso:</span>
+              <span style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:T.tealDk}}>{editModal.codigo}</span>
+            </div>
+            <Field label="Nombre completo">
+              <TInput value={editForm.nombre} onChange={e=>setEditForm(f=>({...f,nombre:e.target.value}))} focusOnMount/>
+            </Field>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              <Field label="Rol">
+                <TSelect value={editForm.rol}
+                  onChange={e=>setEditForm(f=>({...f,rol:e.target.value,sedeId:'',permBodega:true,permCaja:false}))}
+                  options={[
+                    {value:'tecnico',    label:'Técnico'},
+                    {value:'secretaria', label:'Secretaria'},
+                    {value:'admin',      label:'Administrador'},
+                    {value:'auditor',    label:'Auditor'},
+                  ]}/>
+              </Field>
+              {(editForm.rol==='tecnico'||editForm.rol==='secretaria')&&(
+                <Field label="Sede asignada">
+                  <select value={editForm.sedeId} onChange={e=>setEditForm(f=>({...f,sedeId:e.target.value}))}
+                    style={{width:'100%',padding:'8px 11px',border:`1px solid ${T.border}`,borderRadius:8,
+                      fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
+                      outline:'none',boxSizing:'border-box',cursor:'pointer'}}>
+                    <option value="">Seleccionar...</option>
+                    {(editForm.rol==='secretaria'?sedes.filter(s=>s.permite_compras):sedes)
+                      .map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  </select>
+                </Field>
+              )}
+            </div>
+            {editForm.rol==='tecnico'&&(
+              <Field label="Permisos de acceso">
+                <div style={{display:'flex',gap:20,padding:'8px 0'}}>
+                  {[{key:'permBodega',label:'Acceso a Bodega'},{key:'permCaja',label:'Acceso a Caja'}].map(({key,label})=>(
+                    <label key={key} style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                      <input type="checkbox" checked={editForm[key]} onChange={e=>setEditForm(f=>({...f,[key]:e.target.checked}))}
+                        style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </Field>
+            )}
+            {editForm.rol==='secretaria'&&(
+              <Field label="Permisos adicionales">
+                <div style={{display:'flex',gap:20,padding:'8px 0'}}>
+                  <label style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.mid,cursor:'default'}}>
+                    <input type="checkbox" checked readOnly disabled
+                      style={{width:15,height:15,accentColor:T.teal,cursor:'default'}}/>
+                    Acceso a Compras (siempre activo)
+                  </label>
+                  <label style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                    <input type="checkbox" checked={editForm.permCaja} onChange={e=>setEditForm(f=>({...f,permCaja:e.target.checked}))}
+                      style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                    Acceso a Caja
+                  </label>
+                </div>
+              </Field>
+            )}
+            <RolInfo rol={editForm.rol}/>
+            {editErr&&<div style={{background:T.critBg,borderRadius:8,padding:'10px 12px',fontSize:12.5,color:T.crit,marginBottom:12}}>{editErr}</div>}
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
+              <Btn variant="secondary" onClick={()=>{setEditModal(null);setEditErr('');}}>Cancelar</Btn>
+              <Btn onClick={update} disabled={saving} icon={<Ico.Check s={14}/>}>
+                {saving?'Guardando...':'Guardar cambios'}
+              </Btn>
+            </div>
+          </>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL: CARRITO DE PEDIDO
+═══════════════════════════════════════════════════════════ */
+function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
+  const [destino,setDestino]=useState('santa_lucia');
+  const [nota,setNota]=useState('');
+  const [selected,setSelected]=useState({});
+  const [qtys,setQtys]=useState({});
+  const [saving,setSaving]=useState(false);
+
+  const santaLucia=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME);
+
+  const sortOrd={out:0,crit:1,warn:2,ok:3};
+  const sorted=[...items].sort((a,b)=>sortOrd[getStatus(a)]-sortOrd[getStatus(b)]);
+
+  useEffect(()=>{
+    const initQ={}, initS={};
+    items.forEach(i=>{
+      initQ[i.id]=Math.max(1, i.maximum-i.current);
+      if(['out','crit'].includes(getStatus(i))) initS[i.id]=true;
+    });
+    setQtys(initQ); setSelected(initS);
+  },[]);
+
+  const toggle=id=>setSelected(p=>({...p,[id]:!p[id]}));
+  const setQty=(id,v)=>setQtys(p=>({...p,[id]:Math.max(1,parseInt(v)||1)}));
+  const selectedList=sorted.filter(i=>selected[i.id]);
+
+  const submit=async()=>{
+    if(!selectedList.length){alert('Selecciona al menos un insumo.');return;}
+    setSaving(true);
+    await onSubmit({
+      destino,
+      santaLuciaId:santaLucia?.id||null,
+      nota,
+      items:selectedList.map(i=>({
+        item_id:i.id, item_codigo:i.code||null,
+        nombre_item:i.name, categoria:i.category, unidad:i.unit,
+        cantidad_solicitada:qtys[i.id]||1,
+      })),
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div>
+      <div style={{marginBottom:16}}>
+        <label style={{display:'block',fontSize:12,fontWeight:600,color:T.mid,marginBottom:8}}>
+          Destino del pedido
+        </label>
+        <div style={{display:'flex',gap:8}}>
+          {[
+            {id:'santa_lucia',label:'Almacén Santa Lucía',icon:<Ico.Inbox s={14}/>},
+            {id:'externo',label:'Proveedor externo',icon:<Ico.Truck s={14}/>},
+          ].map(d=>(
+            <button key={d.id} onClick={()=>setDestino(d.id)}
+              style={{flex:1,padding:'10px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',
+                border:`2px solid ${destino===d.id?T.teal:T.border}`,
+                background:destino===d.id?T.tealXL:'transparent',
+                color:destino===d.id?T.tealDk:T.mid,
+                fontSize:13,fontWeight:500,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+              {d.icon}{d.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:600,color:T.mid,marginBottom:8}}>
+          Insumos a solicitar —
+          <span style={{color:T.tealDk,fontWeight:700}}> {selectedList.length} seleccionados</span>
+        </div>
+        {sorted.length===0?(
+          <div style={{background:T.canvas,borderRadius:8,padding:'20px',textAlign:'center',color:T.lo,fontSize:13}}>
+            No hay insumos en esta sede
+          </div>
+        ):(
+          <div style={{border:`1px solid ${T.border}`,borderRadius:8,maxHeight:280,overflowY:'auto'}}>
+            {/* header */}
+            <div style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',padding:'7px 12px',
+              background:'#F4F8FA',borderBottom:`1px solid ${T.border}`}}>
+              {['','Insumo','Estado','Cant.'].map((h,i)=>(
+                <span key={i} style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
+              ))}
+            </div>
+            {sorted.map((item,i)=>{
+              const isSel=!!selected[item.id];
+              const st=getStatus(item);
+              return (
+                <div key={item.id} onClick={()=>toggle(item.id)}
+                  style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',
+                    padding:'9px 12px',alignItems:'center',gap:8,cursor:'pointer',
+                    borderBottom:i<sorted.length-1?`1px solid ${T.border}`:'none',
+                    background:isSel?'#F0FAFA':'transparent',transition:'background 0.1s'}}
+                  onMouseEnter={e=>!isSel&&(e.currentTarget.style.background='#F6FAFB')}
+                  onMouseLeave={e=>!isSel&&(e.currentTarget.style.background='transparent')}>
+                  <input type="checkbox" checked={isSel} readOnly
+                    style={{width:15,height:15,cursor:'pointer',accentColor:T.teal}}/>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500,color:T.hi,lineHeight:1.2}}>{item.name}</div>
+                    <div style={{fontSize:10.5,color:T.lo,marginTop:2}}>
+                      {item.current}/{item.minimum} {item.unit}
+                      {item.code&&<span style={{marginLeft:6,fontFamily:'monospace',color:T.tealDk}}>{item.code}</span>}
+                    </div>
+                  </div>
+                  <StatusBadge status={st}/>
+                  <input type="number" min={1} max={999} value={qtys[item.id]||1}
+                    onClick={e=>e.stopPropagation()}
+                    onChange={e=>{e.stopPropagation();setQty(item.id,e.target.value);}}
+                    style={{width:'100%',padding:'5px 8px',border:`1px solid ${T.border}`,
+                      borderRadius:6,fontFamily:'inherit',fontSize:12.5,color:T.hi,
+                      background:T.surface,outline:'none',textAlign:'center',
+                      opacity:isSel?1:0.35}}/>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <Field label="Nota (opcional)">
+        <TInput value={nota} onChange={e=>setNota(e.target.value)}
+          placeholder="Ej: Urgente para fin de mes"/>
+      </Field>
+
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
+        <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
+        <Btn onClick={submit} disabled={saving||!selectedList.length}
+          icon={<Ico.Cart s={14}/>}>
+          {saving?'Enviando...':`Enviar pedido (${selectedList.length} ítems)`}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PEDIDO CARD
+═══════════════════════════════════════════════════════════ */
+function PedidoCard({pedido,expanded,onToggle,onUpdateStatus,canManageIncoming,currentSedeId,isAdmin,saving}) {
+  const os=ORDER_STATUS[pedido.estado]||ORDER_STATUS.pendiente;
+  const isOrigin=pedido.sede_origen_id===currentSedeId;
+  const isExt=pedido.tipo==='externa';
+
+  return (
+    <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,overflow:'hidden'}}>
+      {/* Row */}
+      <div onClick={onToggle}
+        style={{display:'grid',gridTemplateColumns:'110px 1.4fr 1fr auto 22px',
+          padding:'13px 18px',alignItems:'center',gap:12,cursor:'pointer',transition:'background 0.1s'}}
+        onMouseEnter={e=>e.currentTarget.style.background='#F5F9FB'}
+        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+        <span style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:T.tealDk}}>{pedido.referencia}</span>
+        <div>
+          <div style={{fontSize:13,fontWeight:600,color:T.hi}}>{pedido.sede_origen?.nombre||'—'}</div>
+          <div style={{fontSize:11,color:T.lo,marginTop:2}}>
+            {isExt?'Proveedor externo':`→ ${pedido.sede_destino?.nombre||SANTA_LUCIA_NAME}`}
+          </div>
+        </div>
+        <div style={{fontSize:11.5,color:T.lo}}>{fmt(pedido.created_at)}</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'3px 9px',
+            borderRadius:20,background:os.bg,color:os.c,fontSize:11.5,fontWeight:600,whiteSpace:'nowrap'}}>
+            <span style={{width:5,height:5,borderRadius:'50%',background:os.c,flexShrink:0}}/>
+            {os.label}
+          </span>
+          <span style={{fontSize:11,color:T.lo,whiteSpace:'nowrap'}}>
+            {pedido.pedido_items?.length||0} ítems
+          </span>
+        </div>
+        <span style={{color:T.lo,fontSize:9,display:'flex',alignItems:'center',justifyContent:'center',
+          transform:expanded?'rotate(180deg)':'none',transition:'transform 0.2s'}}>▼</span>
+      </div>
+
+      {expanded&&(
+        <div style={{borderTop:`1px solid ${T.border}`,padding:'14px 18px'}}>
+          {/* Items */}
+          <div style={{fontSize:10.5,fontWeight:700,color:T.lo,textTransform:'uppercase',
+            letterSpacing:'0.07em',marginBottom:8}}>Insumos solicitados</div>
+          <div style={{background:T.canvas,borderRadius:8,overflow:'hidden',marginBottom:12}}>
+            {(pedido.pedido_items||[]).map((item,i)=>(
+              <div key={item.id} style={{display:'grid',gridTemplateColumns:'80px 1fr 100px',
+                padding:'9px 12px',alignItems:'center',gap:8,
+                borderBottom:i<(pedido.pedido_items.length-1)?`1px solid ${T.border}`:'none'}}>
+                <span style={{fontFamily:'monospace',fontSize:11.5,color:T.tealDk}}>{item.item_codigo||'—'}</span>
+                <span style={{fontSize:13,fontWeight:500,color:T.hi}}>{item.nombre_item}</span>
+                <span style={{fontSize:12.5,fontWeight:600,color:T.mid,textAlign:'right'}}>
+                  {item.cantidad_solicitada} {item.unidad||''}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {pedido.nota&&(
+            <div style={{background:'#FFFBEB',border:'1px solid #FDE68A',borderRadius:8,
+              padding:'8px 12px',marginBottom:12,fontSize:12.5,color:'#92400E'}}>
+              Nota: {pedido.nota}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {/* Internal: Santa Lucía/admin toma el pedido */}
+            {pedido.estado==='pendiente'&&canManageIncoming&&!isExt&&(
+              <Btn size="sm" onClick={()=>onUpdateStatus('en_proceso')} disabled={saving}>Tomar pedido</Btn>
+            )}
+            {/* Internal: Santa Lucía/admin marca enviado */}
+            {pedido.estado==='en_proceso'&&canManageIncoming&&!isExt&&(
+              <Btn size="sm" onClick={()=>onUpdateStatus('enviado')} disabled={saving}
+                icon={<Ico.Truck s={13}/>}>Marcar como enviado</Btn>
+            )}
+            {/* External: origin manages lifecycle */}
+            {pedido.estado==='pendiente'&&isExt&&isOrigin&&(
+              <Btn size="sm" onClick={()=>onUpdateStatus('en_proceso')} disabled={saving}>
+                Pedido hecho al proveedor
+              </Btn>
+            )}
+            {pedido.estado==='en_proceso'&&isExt&&isOrigin&&(
+              <Btn size="sm" onClick={()=>onUpdateStatus('recibido')} disabled={saving}
+                icon={<Ico.Check s={13}/>}>Confirmar recibo</Btn>
+            )}
+            {/* Origin confirms receipt of internal order */}
+            {pedido.estado==='enviado'&&(isOrigin||isAdmin)&&(
+              <Btn size="sm" onClick={()=>onUpdateStatus('recibido')} disabled={saving}
+                icon={<Ico.Check s={13}/>}>Confirmar recibo</Btn>
+            )}
+            {/* Cancel: creator can cancel when pending */}
+            {pedido.estado==='pendiente'&&(isOrigin||isAdmin)&&(
+              <Btn size="sm" variant="danger" onClick={()=>onUpdateStatus('cancelado')} disabled={saving}>
+                Cancelar
+              </Btn>
+            )}
+            {/* Admin can cancel anything in-flight */}
+            {isAdmin&&['en_proceso','enviado'].includes(pedido.estado)&&(
+              <Btn size="sm" variant="danger" onClick={()=>onUpdateStatus('cancelado')} disabled={saving}>
+                Cancelar
+              </Btn>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PANTALLA: PEDIDOS
+═══════════════════════════════════════════════════════════ */
+function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
+  const [pedidos,setPedidos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [tab,setTab]=useState('entrantes');
+  const [expandedId,setExpandedId]=useState(null);
+  const [saving,setSaving]=useState(false);
+
+  const santaLuciaId=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME)?.id;
+  const isSantaLucia=currentSedeId===santaLuciaId;
+  const canManageIncoming=isSantaLucia||isAdmin;
+
+  const loadPedidos=async()=>{
+    setLoading(true);
+    const {data}=await supabase.from('pedidos').select(`
+      *, pedido_items(*),
+      sede_origen:sede_origen_id(id,nombre),
+      sede_destino:sede_destino_id(id,nombre)
+    `).order('created_at',{ascending:false});
+    setPedidos(data||[]);
+    setLoading(false);
+  };
+
+  useEffect(()=>{
+    loadPedidos();
+    const ch=supabase.channel('pedidos-rt-screen')
+      .on('postgres_changes',{event:'*',schema:'public',table:'pedidos'},loadPedidos)
+      .subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[]);
+
+  /* Filter by tab */
+  const miosPedidos=isAdmin
+    ?pedidos
+    :pedidos.filter(p=>p.sede_origen_id===currentSedeId);
+
+  const entrantesPedidos=isAdmin
+    ?pedidos.filter(p=>p.tipo==='interna')
+    :pedidos.filter(p=>p.sede_destino_id===currentSedeId&&p.tipo==='interna');
+
+  const pendingBadge=entrantesPedidos.filter(p=>['pendiente','en_proceso'].includes(p.estado)).length;
+  const activeTab=canManageIncoming?tab:'mios';
+  const displayed=activeTab==='entrantes'?entrantesPedidos:miosPedidos;
+
+  /* Update status + auto-inventory */
+  const updateStatus=async(pedido,newStatus)=>{
+    setSaving(true);
+    await supabase.from('pedidos')
+      .update({estado:newStatus,updated_by:profile.id})
+      .eq('id',pedido.id);
+
+    /* Enviado (interno): descontar de Santa Lucía */
+    if(newStatus==='enviado' && pedido.tipo==='interna'){
+      for(const item of (pedido.pedido_items||[])){
+        if(!item.item_codigo) continue;
+        const {data:ex}=await supabase.from('items')
+          .select('id,cantidad_actual')
+          .eq('codigo',item.item_codigo)
+          .eq('sede_id',pedido.sede_destino_id)
+          .eq('activo',true)
+          .maybeSingle();
+        if(ex){
+          const newQty=Math.max(0, ex.cantidad_actual - item.cantidad_solicitada);
+          await supabase.from('items').update({cantidad_actual:newQty}).eq('id',ex.id);
+          await logAct(
+            pedido.sede_destino_id, pedido.sede_destino?.nombre||'',
+            ex.id, item.nombre_item,
+            profile.id, profile.nombre,
+            'actualizar', ex.cantidad_actual, newQty,
+            `Pedido ${pedido.referencia} despachado a ${pedido.sede_origen?.nombre}`
+          );
+        }
+      }
+    }
+
+    /* Recibido: sumar stock a la sede que solicitó */
+    if(newStatus==='recibido'){
+      for(const item of (pedido.pedido_items||[])){
+        if(!item.item_codigo) continue;
+        const {data:ex}=await supabase.from('items')
+          .select('id,cantidad_actual')
+          .eq('codigo',item.item_codigo)
+          .eq('sede_id',pedido.sede_origen_id)
+          .eq('activo',true)
+          .maybeSingle();
+        if(ex){
+          const newQty=ex.cantidad_actual+item.cantidad_solicitada;
+          await supabase.from('items').update({cantidad_actual:newQty}).eq('id',ex.id);
+          await logAct(
+            pedido.sede_origen_id, pedido.sede_origen?.nombre||'',
+            ex.id, item.nombre_item,
+            profile.id, profile.nombre,
+            'actualizar', ex.cantidad_actual, newQty,
+            `Pedido ${pedido.referencia} recibido`
+          );
+        }
+      }
+    }
+    loadPedidos();
+    setSaving(false);
+  };
+
+  const isEmpty=displayed.length===0;
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:18}}>
+      <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
+        <div>
+          <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Pedidos</h1>
+          <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>Sistema de reabastecimiento entre sedes</p>
+        </div>
+        {currentSedeId?(
+          <Btn icon={<Ico.Cart s={14}/>} onClick={onShowCart}>Nuevo pedido</Btn>
+        ):(
+          <div style={{fontSize:12,color:T.lo,fontStyle:'italic'}}>Selecciona una sede para crear un pedido</div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      {canManageIncoming&&(
+        <div style={{display:'flex',gap:0,borderBottom:`1px solid ${T.border}`}}>
+          {[{id:'entrantes',label:'Entrantes',badge:pendingBadge},{id:'mios',label:'Mis pedidos'}].map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)}
+              style={{padding:'9px 18px',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',
+                borderBottom:`2px solid ${tab===t.id?T.teal:'transparent'}`,marginBottom:-1,
+                color:tab===t.id?T.tealDk:T.mid,fontSize:13.5,fontWeight:tab===t.id?600:400,
+                display:'flex',alignItems:'center',gap:6}}>
+              {t.label}
+              {t.badge>0&&<span style={{minWidth:18,height:18,borderRadius:9,padding:'0 5px',
+                background:T.crit,color:'#fff',fontSize:10.5,fontWeight:700,
+                display:'flex',alignItems:'center',justifyContent:'center'}}>{t.badge}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {loading?(
+        <div style={{textAlign:'center',padding:'48px 0',color:T.lo,fontSize:13}}>Cargando pedidos...</div>
+      ):isEmpty?(
+        <div style={{paddingTop:60,display:'flex',flexDirection:'column',alignItems:'center',gap:14}}>
+          <div style={{width:54,height:54,borderRadius:'50%',background:T.tealXL,
+            display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <Ico.Cart s={24} c={T.teal}/>
+          </div>
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:15,fontWeight:600,color:T.hi}}>Sin pedidos</div>
+            <div style={{fontSize:13,color:T.lo,marginTop:4}}>
+              {activeTab==='entrantes'?'No hay pedidos entrantes pendientes':'No tienes pedidos registrados'}
+            </div>
+          </div>
+        </div>
+      ):(
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {displayed.map(p=>(
+            <PedidoCard key={p.id} pedido={p}
+              expanded={expandedId===p.id}
+              onToggle={()=>setExpandedId(expandedId===p.id?null:p.id)}
+              onUpdateStatus={s=>updateStatus(p,s)}
+              canManageIncoming={canManageIncoming}
+              currentSedeId={currentSedeId}
+              isAdmin={isAdmin}
+              saving={saving}/>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1284,18 +1884,36 @@ function LoginScreen() {
 export default function App() {
   const {session,profile,sedes,loading:authLoading,signOut}=useAuth();
 
-  const [items,setItems]     = useState([]);
-  const [itemsBySede,setIBS] = useState({});
-  const [view,setView]       = useState("inicio");
-  const [modal,setModal]     = useState(null);
-  const [sel,setSel]         = useState(null);
-  const [filter,setFilter]   = useState({search:"",status:"Todos"});
-  const [dbLoading,setDbL]   = useState(false);
+  const [items,setItems]       = useState([]);
+  const [itemsBySede,setIBS]   = useState({});
+  const [view,setView]         = useState("inicio");
+  const [modal,setModal]       = useState(null);
+  const [sel,setSel]           = useState(null);
+  const [filter,setFilter]     = useState({search:"",status:"Todos"});
+  const [dbLoading,setDbL]     = useState(false);
   const [selectedSede,setSede] = useState(null);
+  const [pedidosBadge,setPedBadge] = useState(0);
 
-  const isAdmin = profile?.rol==='admin';
+  const isAdmin      = profile?.rol==='admin';
+  const isAuditor    = profile?.rol==='auditor';
+  const isSecretaria = profile?.rol==='secretaria';
+  const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
   const currentSedeId = isAdmin ? selectedSede : profile?.sede_id;
   const currentSedeName = sedes.find(s=>s.id===currentSedeId)?.nombre || (isAdmin&&!currentSedeId?null:profile?.sedes?.nombre);
+
+  // Auditor: solo puede ver auditoria, caja_historial, compras
+  useEffect(()=>{
+    if(isAuditor && !['inicio','auditoria','caja_historial','compras','gastos_fijos'].includes(view)) setView('inicio');
+  },[isAuditor,view]);
+
+
+  // Secretaria: solo puede ver compras (y caja si tiene permiso)
+  useEffect(()=>{
+    if(!isSecretaria) return;
+    const allowed=['inicio','compras','inventario'];
+    if(profile?.permisos?.caja===true) allowed.push('caja_dia','caja_historial');
+    if(!allowed.includes(view)) setView('inicio');
+  },[isSecretaria,view,profile?.permisos?.caja]);
 
   /* ── Cargar items de Supabase ─────────────────────────── */
   const loadItems = useCallback(async()=>{
@@ -1332,6 +1950,25 @@ export default function App() {
     return ()=>supabase.removeChannel(ch);
   },[profile,currentSedeId]);
 
+  /* ── Badge de pedidos entrantes (Santa Lucía + admin) ── */
+  useEffect(()=>{
+    if(!profile||!sedes.length) return;
+    const santaId=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME)?.id;
+    if(!santaId) return;
+    const canSee=isAdmin||profile?.sede_id===santaId;
+    if(!canSee){setPedBadge(0);return;}
+    const refresh=async()=>{
+      const {count}=await supabase.from('pedidos').select('*',{count:'exact',head:true})
+        .in('estado',['pendiente','en_proceso']).eq('tipo','interna').eq('sede_destino_id',santaId);
+      setPedBadge(count||0);
+    };
+    refresh();
+    const ch=supabase.channel('pedidos-badge-app')
+      .on('postgres_changes',{event:'*',schema:'public',table:'pedidos'},refresh)
+      .subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[profile,sedes,isAdmin]);
+
   /* ── Badge de alertas ────────────────────────────────── */
   const alertCount=useMemo(()=>items.filter(i=>getStatus(i)!=='ok').length,[items]);
 
@@ -1360,7 +1997,9 @@ export default function App() {
     const sedeId = data.sedeId || currentSedeId;
     const sedeName = sedes.find(s=>s.id===sedeId)?.nombre || currentSedeName;
     if(!sedeId){alert('Selecciona una sede.');return;}
-    const {data:row,error}=await supabase.from('items').insert(toDB(data,sedeId,profile.id)).select().single();
+    const code = await generateCode(data.category);
+    const {data:row,error}=await supabase.from('items')
+      .insert(toDB({...data,code},sedeId,profile.id)).select().single();
     if(error){alert('Error al guardar: '+error.message);return;}
     await logAct(sedeId,sedeName,row.id,data.name,profile.id,profile.nombre,'agregar',undefined,data.current,null);
     loadItems(); close();
@@ -1399,6 +2038,26 @@ export default function App() {
     loadItems();
   };
 
+  /* ── Crear pedido ────────────────────────────────────── */
+  const handleCreateOrder=async({destino,santaLuciaId,nota,items:orderItems})=>{
+    if(!currentSedeId){alert('Selecciona una sede para crear un pedido.');return;}
+    const ref=await generateOrderRef();
+    const sedeDestinoId=destino==='santa_lucia'?santaLuciaId:null;
+    const tipo=destino==='santa_lucia'?'interna':'externa';
+    const {data:pedido,error}=await supabase.from('pedidos').insert({
+      referencia:ref, sede_origen_id:currentSedeId,
+      sede_destino_id:sedeDestinoId, tipo,
+      nota:nota||null, created_by:profile.id,
+    }).select().single();
+    if(error){alert('Error al crear pedido: '+error.message);return;}
+    const {error:ie}=await supabase.from('pedido_items').insert(
+      orderItems.map(i=>({pedido_id:pedido.id,...i}))
+    );
+    if(ie){alert('Error al guardar ítems: '+ie.message);return;}
+    setModal(null);
+    setView('pedidos');
+  };
+
   const handleExport=async()=>{
     const csv=itemsToCSV(items);
     const name=`labstock-${currentSedeName||'inventario'}-${new Date().toISOString().split('T')[0]}.csv`;
@@ -1431,7 +2090,7 @@ export default function App() {
     <div className="app-shell">
       <TitleBar profile={profile} sedeName={currentSedeName} onSignOut={signOut}/>
       <div className="app-body">
-        <Sidebar view={view} onNav={setView} alertCount={alertCount}
+        <Sidebar view={view} onNav={setView} alertCount={alertCount} pedidosBadge={pedidosBadge}
           profile={profile} sedes={sedes}
           selectedSede={selectedSede} onSedeChange={setSede}/>
         <main className="main-content">
@@ -1442,13 +2101,19 @@ export default function App() {
             </div>
           )}
           {view==="inicio"&&(
-            <InicioScreen items={items} onGoAlerts={()=>setView("alertas")}
+            <InicioScreen profile={profile} items={items}
+              isAdmin={isAdmin} isAuditor={isAuditor} isSecretaria={isSecretaria}
+              cajaPerm={cajaPerm}
+              currentSedeId={currentSedeId} onNav={setView}/>
+          )}
+          {view==="resumen"&&(
+            <ResumenBodegaScreen items={items} onGoAlerts={()=>setView("alertas")}
               onReport={()=>setModal("report")} sedeName={currentSedeName}
               isAdmin={isAdmin} sedes={sedes} itemsBySede={itemsBySede}/>
           )}
           {view==="inventario"&&(
             <InventarioScreen items={items} filter={filter} setFilter={setFilter} filtered={filtered}
-              canEdit={!!(currentSedeId||isAdmin)}
+              canEdit={!isSecretaria && !!(currentSedeId||isAdmin)}
               onAdd={()=>setModal("add")}
               onEdit={i=>{setSel(i);setModal("edit");}}
               onUpdate={i=>{setSel(i);setModal("update");}}
@@ -1464,8 +2129,39 @@ export default function App() {
           {view==="actividad"&&(
             <ActividadScreen sedeId={currentSedeId} isAdmin={isAdmin}/>
           )}
+          {view==="pedidos"&&(
+            <PedidosScreen
+              sedes={sedes} profile={profile} isAdmin={isAdmin}
+              currentSedeId={currentSedeId} items={items}
+              onShowCart={()=>setModal("cart")}/>
+          )}
+          {view==="compras"&&(isAdmin||isAuditor||isSecretaria)&&(
+            <ComprasScreen
+              profile={profile} isAdmin={isAdmin} isAuditor={isAuditor} sedes={sedes}/>
+          )}
           {view==="usuarios"&&isAdmin&&(
             <UsuariosScreen sedes={sedes}/>
+          )}
+          {view==="gastos_fijos"&&(isAdmin||isAuditor)&&(
+            <GastosFijosScreen profile={profile} sedes={sedes} readOnly={isAuditor}/>
+          )}
+          {view==="analisis"&&isAdmin&&(
+            <AnalisisFinancieroScreen sedes={sedes}/>
+          )}
+          {view==="auditoria"&&isAuditor&&(
+            <AuditorDashboard onGoHistorial={()=>setView('caja_historial')}/>
+          )}
+          {view==="caja_dia"&&!isAuditor&&(
+            <CajaScreen
+              profile={profile} isAdmin={isAdmin}
+              currentSedeId={currentSedeId}
+              selectedSede={selectedSede}
+              sedes={sedes}
+              onSedeChange={setSede}/>
+          )}
+          {view==="caja_historial"&&(
+            <HistorialCajaScreen
+              profile={profile} isAdmin={isAdmin} sedes={sedes}/>
           )}
         </main>
       </div>
@@ -1488,6 +2184,10 @@ export default function App() {
       </Modal>
       <Modal open={modal==="import"} onClose={close} title="Importar inventario desde CSV" maxWidth={500}>
         <ImportModal onImport={handleImport} onClose={close}/>
+      </Modal>
+      <Modal open={modal==="cart"} onClose={close} title="Nuevo pedido" maxWidth={620}>
+        <CartModal items={items} sedes={sedes} currentSedeId={currentSedeId}
+          onSubmit={handleCreateOrder} onClose={close}/>
       </Modal>
     </div>
   );
