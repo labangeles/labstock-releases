@@ -10,6 +10,7 @@ const isDev = !app.isPackaged
 
 let mainWindow = null
 let tray = null
+let autoUpdater = null
 
 /* ── ÍCONO DE APLICACIÓN ────────────────────────────────── */
 const ICON_PATH = path.join(__dirname, 'icon.png')
@@ -256,7 +257,7 @@ ipcMain.handle('disable-user', async (_, userId) => {
 function setupUpdater() {
   if (isDev) return  // No buscar actualizaciones en modo desarrollo
 
-  const { autoUpdater } = require('electron-updater')
+  autoUpdater = require('electron-updater').autoUpdater
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
 
