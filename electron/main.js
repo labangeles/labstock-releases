@@ -324,19 +324,36 @@ function setupUpdater() {
   setTimeout(() => autoUpdater.checkForUpdates(), 3000)
 }
 
-/* ── INICIO ─────────────────────────────────────────────── */
-app.whenReady().then(() => {
-  createWindow()
-  createTray()
-  setupUpdater()
-})
+/* ── SINGLE INSTANCE — solo una ventana a la vez ─────────── */
+const gotLock = app.requestSingleInstanceLock()
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' && !tray) app.quit()
-})
+if (!gotLock) {
+  // Ya hay una instancia corriendo — salir inmediatamente
+  app.quit()
+} else {
+  // Si alguien intenta abrir una segunda instancia, traer la existente al frente
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) mainWindow.show()
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
 
-app.on('activate', () => {
-  if (mainWindow) { mainWindow.show(); mainWindow.focus() }
-})
+  /* ── INICIO ───────────────────────────────────────────── */
+  app.whenReady().then(() => {
+    createWindow()
+    createTray()
+    setupUpdater()
+  })
 
-app.on('before-quit', () => { app.isQuitting = true })
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin' && !tray) app.quit()
+  })
+
+  app.on('activate', () => {
+    if (mainWindow) { mainWindow.show(); mainWindow.focus() }
+  })
+
+  app.on('before-quit', () => { app.isQuitting = true })
+}
