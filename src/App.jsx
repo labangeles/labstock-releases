@@ -102,7 +102,7 @@ function itemsToCSV(items) {
   const rows = items.map(i =>
     `"${i.code||''}","${i.name}","${i.category}","${i.unit}",${i.current},${i.minimum},${i.maximum}`
   );
-  return `${BOM}${CSV_SEP}\n${CSV_COLS}\n${rows.join('\n')}`;
+  return `${BOM}${CSV_SEP}\r\n${CSV_COLS}\r\n${rows.join('\r\n')}`;
 }
 
 function parseCSV(text) {
@@ -590,7 +590,7 @@ function ImportModal({onImport,onClose}) {
   const [loading,setLoading]=useState(false);
 
   const download=async()=>{
-    const template=`${BOM}${CSV_SEP}\n${CSV_COLS}\nGlucosa Enzimatica,Reactivos,frascos,4,5,20\nCreatinina,Reactivos,frascos,8,5,20`;
+    const template=`${BOM}${CSV_SEP}\r\n${CSV_COLS}\r\nGlucosa Enzimatica,Reactivos,frascos,4,5,20\r\nCreatinina,Reactivos,frascos,8,5,20`;
     if(window.electronAPI?.saveFile){
       await window.electronAPI.saveFile({defaultPath:'plantilla-labstock.csv',content:template});
     } else {

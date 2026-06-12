@@ -69,9 +69,9 @@ function exportChecklist(items, sedes, mes, anio) {
     gasto.numero_cuenta || '',
     pago?.notas || '',
   ]);
-  const csv = [headers, ...rows]
+  const csv = 'sep=,\r\n' + [headers, ...rows]
     .map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
+    .join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');

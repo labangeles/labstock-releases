@@ -1035,9 +1035,9 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
       c.cadena_frio ? 'Sí' : 'No',
       c.registrador?.nombre || '',
     ]);
-    const csv = [headers, ...rows]
+    const csv = 'sep=,\r\n' + [headers, ...rows]
       .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+      .join('\r\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
