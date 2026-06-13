@@ -4,6 +4,13 @@ const {
   app, BrowserWindow, Tray, Menu, nativeImage,
   ipcMain, Notification, dialog,
 } = require('electron')
+
+// Evitar que Chrome throttlee timers y rendering cuando la ventana está en segundo plano
+app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('disable-background-timer-throttling')
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows')
+// Mejor gestión de memoria V8
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512 --expose-gc')
 const path = require('path')
 const fs   = require('fs')
 const isDev = !app.isPackaged
@@ -30,13 +37,15 @@ function createWindow() {
     width: 1280, height: 840,
     minWidth: 1024, minHeight: 600,
     title: 'LabStock — Lab. Clínico Los Ángeles',
-    backgroundColor: '#EEF2F7',
+    backgroundColor: '#0E1419', // evita flash blanco al cargar en modo oscuro
     icon: ICON_PATH,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      backgroundThrottling: false,  // mantiene Realtime activo aunque no sea la ventana enfocada
+      spellcheck: false,            // menos overhead en inputs de texto
     },
   })
 

@@ -371,7 +371,7 @@ export function AuditorDashboard({ onGoHistorial }) {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: '#F4F8FA' }}>
+                  <tr style={{ background: 'var(--table-head-bg)' }}>
                     {['Sede','Cuadres','Ingreso','Gastos','% Gastos','Depósitos','Diferencia acum.','Días desc.'].map(h => (
                       <th key={h} style={{
                         padding: '9px 14px', textAlign: h === 'Sede' ? 'left' : 'right',
@@ -389,7 +389,7 @@ export function AuditorDashboard({ onGoHistorial }) {
                     return (
                       <tr key={s.name}
                         style={{ borderBottom: i < sedeData.length - 1 ? `1px solid ${T.border}` : 'none' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#F5F9FB'}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--row-hover)'}
                         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                         <td style={{ padding: '11px 14px', fontWeight: 600, color: T.hi }}>{s.name}</td>
                         <td style={{ padding: '11px 14px', textAlign: 'right', color: T.mid }}>{s.total}</td>
@@ -430,7 +430,7 @@ export function AuditorDashboard({ onGoHistorial }) {
                     );
                   })}
                   {/* Fila totales */}
-                  <tr style={{ background: '#F4F8FA', borderTop: `2px solid ${T.border}` }}>
+                  <tr style={{ background: 'var(--table-head-bg)', borderTop: `2px solid ${T.border}` }}>
                     <td style={{ padding: '11px 14px', fontWeight: 700, color: T.hi }}>Total</td>
                     <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: T.hi }}>
                       {cuadres.length}

@@ -42,7 +42,7 @@ function Sel({label, value, onChange, children, hint}) {
       </label>
       <select value={value} onChange={onChange}
         style={{width:'100%', padding:'8px 11px', border:`1px solid ${T.border}`, borderRadius:8,
-          fontFamily:'inherit', fontSize:13, color:T.hi, background:'#F8FAFB',
+          fontFamily:'inherit', fontSize:13, color:T.hi, background:'var(--input-bg)',
           outline:'none', boxSizing:'border-box', cursor:'pointer'}}>
         {children}
       </select>
@@ -551,7 +551,7 @@ function ConfigTab({ profile, sedes }) {
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1.2fr 0.9fr 1.2fr 90px 64px',
-          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
+          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
           {['Nombre','Categoría','Sede','Monto/mes','Pago / Beneficiario','Estado',''].map((h,i)=>(
             <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,
               textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>

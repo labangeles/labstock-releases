@@ -44,20 +44,20 @@ function DetallePanel({ cuadreId, abiertoPasado, isAdmin, onCerrar, cerrando }) 
     : '';
 
   return (
-    <div style={{ padding:'14px 18px', background:'#F8FBFC', borderTop:`1px solid ${T.border}` }}>
+    <div style={{ padding:'14px 18px', background:'var(--bg-surface)', borderTop:`1px solid ${T.border}` }}>
 
       {/* Banner + botón de cierre forzado para admin */}
       {abiertoPasado && isAdmin && (
-        <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:8,
+        <div style={{ background:T.warnBg, border:`1px solid ${T.warn}55`, borderRadius:8,
           padding:'10px 14px', marginBottom:14, display:'flex', alignItems:'center',
           justifyContent:'space-between', gap:12 }}>
-          <div style={{ fontSize:12.5, color:'#92400E' }}>
+          <div style={{ fontSize:12.5, color:T.warn }}>
             <strong>⚠ Cuadre sin cerrar.</strong> Puedes forzar el cierre como administrador.
             Los valores actuales quedarán registrados tal como están.
           </div>
           <button onClick={onCerrar} disabled={cerrando}
             style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 16px',
-              background:'#92400E', color:'white', border:'none', borderRadius:8,
+              background:T.warn, color:'#000', border:'none', borderRadius:8,
               fontFamily:'inherit', fontSize:12.5, fontWeight:700, cursor: cerrando ? 'not-allowed' : 'pointer',
               opacity: cerrando ? 0.6 : 1, whiteSpace:'nowrap', flexShrink:0 }}>
             {cerrando ? 'Cerrando...' : '⚑ Cerrar cuadre'}
@@ -134,6 +134,14 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
 
   const load = async () => {
     setLoading(true);
+
+    // Usuarios sin acceso global y sin sede asignada: no mostrar nada
+    if (!canSeeAllSedes && !profile?.sede_id && !sedeFiltro) {
+      setCuadres([]);
+      setLoading(false);
+      return;
+    }
+
     let q = supabase.from('v_cuadres_resumen').select('*')
       .gte('fecha', fechaDesde)
       .lte('fecha', fechaHasta)
@@ -220,7 +228,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
           <input type="date" value={fechaDesde} max={fechaHasta}
             onChange={e => setFechaDesde(e.target.value)}
             style={{ padding:'7px 10px', border:`1px solid ${T.border}`, borderRadius:8,
-              fontFamily:'inherit', fontSize:13, color:T.hi, outline:'none', background:'#F8FAFB' }}/>
+              fontFamily:'inherit', fontSize:13, color:T.hi, outline:'none', background:'var(--input-bg)' }}/>
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
@@ -229,7 +237,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
           <input type="date" value={fechaHasta} min={fechaDesde} max={hoy}
             onChange={e => setFechaHasta(e.target.value)}
             style={{ padding:'7px 10px', border:`1px solid ${T.border}`, borderRadius:8,
-              fontFamily:'inherit', fontSize:13, color:T.hi, outline:'none', background:'#F8FAFB' }}/>
+              fontFamily:'inherit', fontSize:13, color:T.hi, outline:'none', background:'var(--input-bg)' }}/>
         </div>
 
         {canSeeAllSedes && (
@@ -239,7 +247,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
             <select value={sedeFiltro} onChange={e => setSedeF(e.target.value)}
               style={{ padding:'7px 10px', border:`1px solid ${T.border}`, borderRadius:8,
                 fontFamily:'inherit', fontSize:13, color:T.hi, outline:'none',
-                background:'#F8FAFB', cursor:'pointer', minWidth:160 }}>
+                background:'var(--input-bg)', cursor:'pointer', minWidth:160 }}>
               <option value="">Todas las sedes</option>
               {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
             </select>
@@ -255,7 +263,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
         <div style={{ display:'grid',
           gridTemplateColumns: canSeeAllSedes ? '100px 1fr 110px 100px 100px 100px 100px 22px'
                                               : '100px 110px 100px 100px 100px 100px 22px',
-          padding:'8px 18px', background:'#F4F8FA',
+          padding:'8px 18px', background:'var(--table-head-bg)',
           borderBottom:`1px solid ${T.border}` }}>
           {[
             'Fecha',
@@ -290,10 +298,10 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
                   onClick={() => setExpanded(isExpanded ? null : c.id)}
                   style={{ display:'grid', gridTemplateColumns:cols,
                     padding:'12px 18px', alignItems:'center', cursor:'pointer',
-                    background: abiertoPasado ? '#FFFBEB' : 'transparent',
+                    background: abiertoPasado ? 'var(--warn-bg)' : 'transparent',
                     transition:'background 0.1s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = abiertoPasado ? '#FFF7D0' : '#F5F9FB'}
-                  onMouseLeave={e => e.currentTarget.style.background = abiertoPasado ? '#FFFBEB' : 'transparent'}>
+                  onMouseEnter={e => e.currentTarget.style.background = abiertoPasado ? 'var(--warn-bg)' : 'var(--row-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = abiertoPasado ? 'var(--warn-bg)' : 'transparent'}>
 
                   <span style={{ fontSize:13, color:T.hi, fontWeight:500 }}>
                     {fmtFecha(c.fecha)}

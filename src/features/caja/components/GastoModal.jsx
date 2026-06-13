@@ -57,7 +57,7 @@ export function GastoModal({ onSave, onClose, saving }) {
               style={{ width:'100%', padding:'8px 11px 8px 26px',
                 border:`1px solid ${err.monto?T.crit:T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-                background:'#F8FAFB', outline:'none', boxSizing:'border-box' }} />
+                background:'var(--input-bg)', outline:'none', boxSizing:'border-box' }} />
           </div>
         </Field>
       </div>

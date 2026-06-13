@@ -53,9 +53,10 @@ function QuickNum({ label, value, color }) {
    ────────────────────────────────────────────────────────── */
 function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
   const {
-    cuadre, gastos, depositos, loading, saving, isOpen,
+    cuadre, gastos, depositos, loading, saving, isOpen, rlsError,
     totalGastos, totalDepositos, ingresoNum,
     cajaBase, depositoEsperado, cajaFinal, diferencia,
+    soranteAnterior,
     saveIngreso, addGasto, deleteGasto, addDeposito, deleteDeposito,
     cerrar, reabrir,
   } = useCuadre(sedeId, profile);
@@ -77,6 +78,19 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
     </div>
   );
 
+  if (rlsError) return (
+    <div style={{ background:T.critBg, border:`1px solid ${T.crit}44`, borderRadius:12,
+      padding:'20px 24px', display:'flex', gap:12, alignItems:'flex-start' }}>
+      <Ico.Warn s={18} c={T.crit}/>
+      <div>
+        <div style={{ fontSize:14, fontWeight:700, color:T.crit, marginBottom:4 }}>
+          Sin acceso al cuadre de caja
+        </div>
+        <div style={{ fontSize:13, color:'#B81818' }}>{rlsError}</div>
+      </div>
+    </div>
+  );
+
   const estadoBadge = isOpen
     ? { label:'Abierto', c:T.ok,   bg:T.okBg   }
     : { label:'Cerrado', c:T.crit, bg:T.critBg };
@@ -92,6 +106,23 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
             <strong>{pendientes}</strong> cuadre{pendientes>1?'s':''} de días anteriores sin cerrar.
             Revísalos en el Historial.
           </span>
+        </div>
+      )}
+
+      {soranteAnterior && isOpen && (
+        <div style={{ background:'rgba(234,179,8,0.1)', border:`1px solid ${T.warn}55`,
+          borderRadius:10, padding:'10px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
+          <Ico.Warn s={16} c={T.warn} style={{flexShrink:0,marginTop:1}}/>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.warn, marginBottom:2 }}>
+              Sobrante del día anterior: {fmtQ(soranteAnterior.monto)}
+            </div>
+            <div style={{ fontSize:12, color:T.mid }}>
+              El cuadre del {new Date(soranteAnterior.fecha + 'T12:00:00').toLocaleDateString('es-GT',
+                { weekday:'long', day:'2-digit', month:'long' })} cerró con efectivo extra en caja.
+              Verifica que el efectivo físico coincide con la caja base actual (Q800).
+            </div>
+          </div>
         </div>
       )}
 
@@ -144,7 +175,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
             ) : (
               <>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 100px 80px 80px 36px',
-                  padding:'6px 16px', background:'#F4F8FA', borderBottom:`1px solid ${T.border}` }}>
+                  padding:'6px 16px', background:'var(--table-head-bg)', borderBottom:`1px solid ${T.border}` }}>
                   {['Descripción','Categoría','Monto','Comprobante',''].map((h,i) => (
                     <span key={i} style={{ fontSize:10, fontWeight:700, color:T.lo,
                       textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>
@@ -197,7 +228,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
             ) : (
               <>
                 <div style={{ display:'grid', gridTemplateColumns:'1.2fr 120px 80px 36px',
-                  padding:'6px 16px', background:'#F4F8FA', borderBottom:`1px solid ${T.border}` }}>
+                  padding:'6px 16px', background:'var(--table-head-bg)', borderBottom:`1px solid ${T.border}` }}>
                   {['Banco / Boleta','Registrado por','Monto',''].map((h,i) => (
                     <span key={i} style={{ fontSize:10, fontWeight:700, color:T.lo,
                       textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>

@@ -2,14 +2,14 @@ import { useState, useEffect, useRef } from "react";
 
 /* ── TOKENS ──────────────────────────────────────────────── */
 export const T = {
-  teal:'#2BBFBE', tealDk:'#1A9696', tealXL:'#EAF8F8', tealL:'#B8E8E8',
-  canvas:'#EDF2F4', surface:'#FFFFFF',
-  hi:'#152028', mid:'#50606C', lo:'#8899A4',
-  border:'#DCE8EC', borderMd:'#C4D8DC',
-  ok:'#12A050', okBg:'#DDFAEC',
-  warn:'#B07400', warnBg:'#FFF0D0',
-  crit:'#D41E1E', critBg:'#FFEAEA',
-  out:'#6C7C88', outBg:'#EEF2F4',
+  teal:'var(--teal)', tealDk:'var(--teal-dark)', tealXL:'var(--teal-xlight)', tealL:'var(--teal-light)',
+  canvas:'var(--bg-canvas)', surface:'var(--bg-surface)',
+  hi:'var(--text-hi)', mid:'var(--text-mid)', lo:'var(--text-lo)',
+  border:'var(--border)', borderMd:'var(--border-mid)',
+  ok:'var(--ok)', okBg:'var(--ok-bg)',
+  warn:'var(--warn)', warnBg:'var(--warn-bg)',
+  crit:'var(--crit)', critBg:'var(--crit-bg)',
+  out:'var(--out)', outBg:'var(--out-bg)',
 };
 
 /* ── ICONS ───────────────────────────────────────────────── */
@@ -55,6 +55,10 @@ export const Ico = {
   Wallet:       ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>),
   TrendingUp:   ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="23,6 13.5,15.5 8.5,10.5 1,18"/><polyline points="17,6 23,6 23,12"/></svg>),
   Layers:       ({s=18,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12,2 2,7 12,12 22,7"/><polyline points="2,17 12,22 22,17"/><polyline points="2,12 12,17 22,12"/></svg>),
+  Sun:          ({s=16,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>),
+  Moon:         ({s=16,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>),
+  Eye:          ({s=16,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>),
+  EyeOff:       ({s=16,c='currentColor'}) => (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>),
 };
 
 /* ── UTILIDAD: formato moneda Guatemala ──────────────────── */
@@ -64,7 +68,7 @@ export const fmtQ = n =>
 /* ── COMPONENTES ─────────────────────────────────────────── */
 export function Btn({children,variant='primary',icon,onClick,size='md',disabled,full,style:ext}) {
   const [hov,setHov]=useState(false);
-  const sz={sm:{padding:'5px 12px',fontSize:12},md:{padding:'8px 16px',fontSize:13.5},lg:{padding:'10px 22px',fontSize:14.5}};
+  const sz={sm:{padding:'5px 12px',fontSize:12.5},md:{padding:'8px 16px',fontSize:14},lg:{padding:'10px 22px',fontSize:15}};
   const vs={
     primary: {bg:hov&&!disabled?T.tealDk:T.teal,color:'#fff',border:'none'},
     secondary:{bg:hov&&!disabled?T.border:T.canvas,color:T.mid,border:`1px solid ${T.border}`},
@@ -149,8 +153,8 @@ export function TInput({value,onChange,placeholder,type='text',min,max,focusOnMo
       onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
       style={{width:'100%',padding:'8px 11px',
         border:`1px solid ${foc?T.teal:T.border}`,
-        borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,
-        background:disabled?T.canvas:'#F8FAFB',
+        borderRadius:8,fontFamily:'inherit',fontSize:13.5,color:T.hi,
+        background:disabled?T.canvas:'var(--input-bg)',
         outline:'none',transition:'border-color 0.12s',boxSizing:'border-box',
         cursor:disabled?'not-allowed':'text'}}/>
   );
@@ -162,8 +166,8 @@ export function TSelect({value,onChange,options,disabled}) {
     <select value={value} onChange={onChange} disabled={disabled}
       onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
       style={{width:'100%',padding:'8px 11px',border:`1px solid ${foc?T.teal:T.border}`,
-        borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,
-        background:disabled?T.canvas:'#F8FAFB',
+        borderRadius:8,fontFamily:'inherit',fontSize:13.5,color:T.hi,
+        background:disabled?T.canvas:'var(--input-bg)',
         outline:'none',transition:'border-color 0.12s',boxSizing:'border-box',cursor:'pointer'}}>
       {options.map(o=>typeof o==='string'
         ? <option key={o} value={o}>{o}</option>

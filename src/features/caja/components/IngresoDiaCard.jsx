@@ -38,7 +38,7 @@ export function IngresoDiaCard({ ingreso, isOpen, saving, onSave }) {
               style={{ width:'100%', padding:'10px 11px 10px 26px',
                 border:`1px solid ${editing ? T.teal : T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:16, fontWeight:700,
-                color:T.hi, background:'#F8FAFB', outline:'none',
+                color:T.hi, background:'var(--input-bg)', outline:'none',
                 transition:'border-color 0.12s', boxSizing:'border-box' }}
             />
           </div>

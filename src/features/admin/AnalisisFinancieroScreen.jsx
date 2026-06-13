@@ -259,7 +259,7 @@ export function AnalisisFinancieroScreen({ sedes }) {
               </div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 1fr',
-                padding:'8px 20px', borderBottom:`1px solid ${T.border}`, background:'#F4F8FA' }}>
+                padding:'8px 20px', borderBottom:`1px solid ${T.border}`, background:'var(--table-head-bg)' }}>
                 {['Sede','Ingresos','G. Caja','Compras','G. Fijos','Utilidad'].map((h,i) => (
                   <span key={i} style={{ fontSize:10.5, fontWeight:700, color:T.lo,
                     textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>
@@ -304,7 +304,7 @@ export function AnalisisFinancieroScreen({ sedes }) {
               {/* Fila total */}
               <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 1fr',
                 padding:'12px 20px', alignItems:'center',
-                background:'#F4F8FA', borderTop:`2px solid ${T.border}` }}>
+                background:'var(--table-head-bg)', borderTop:`2px solid ${T.border}` }}>
                 <span style={{ fontSize:13, fontWeight:700, color:T.hi }}>TOTAL</span>
                 <span style={{ fontSize:13, fontWeight:700, color:T.ok }}>{fmtQ(totalIng)}</span>
                 <span style={{ fontSize:13, fontWeight:700, color:T.warn }}>{fmtQ(totalGCaja)}</span>

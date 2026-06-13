@@ -10,7 +10,8 @@ begin;
 delete from gastos_fijos_pagos;
 delete from gastos_fijos;
 
--- ── 2. Caja (gastos y depósitos cascadean desde cuadres) ─
+-- ── 2. Caja (borrar dependientes antes que cuadres) ──────
+delete from actividad_caja;
 delete from gastos_caja;
 delete from depositos_caja;
 delete from cuadres_caja;

@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import logoTeal from "./assets/logo-icon-teal.png";
 import { supabase } from "./lib/supabase";
 import { useAuth } from "./contexts/AuthContext";
+import { useTheme } from "./contexts/ThemeContext";
+import { useOnline } from "./contexts/OnlineContext";
 import { T, Ico, Btn, IconBtn, Modal, Field, TInput, TSelect, StatCard } from "./shared/ui";
 import { CajaScreen } from "./features/caja/CajaScreen";
 import { HistorialCajaScreen } from "./features/caja/HistorialCajaScreen";
@@ -143,30 +145,77 @@ function StatusBadge({status}) {
 
 
 function TitleBar({profile, sedeName, onSignOut}) {
+  const [hovLogout,setHovLogout]=useState(false);
+  const [hovTheme,setHovTheme]=useState(false);
+  const { isDark, toggleTheme } = useTheme();
+  const { isOnline, syncing, pendingOps } = useOnline();
+
   return (
-    <div style={{height:32,flexShrink:0,background:'#F5FAFA',borderBottom:`1px solid ${T.border}`,
+    <div style={{height:34,flexShrink:0,background:'var(--bg-titlebar)',borderBottom:`1px solid ${T.border}`,
       display:'flex',alignItems:'center',padding:'0 12px',
       userSelect:'none',WebkitAppRegion:'drag',position:'relative'}}>
       <span style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-        fontSize:11.5,color:T.lo,letterSpacing:'0.015em',pointerEvents:'none'}}>
+        fontSize:12,color:T.mid,letterSpacing:'0.015em',fontWeight:500,pointerEvents:'none'}}>
         {sedeName ? `${sedeName} — LabStock` : 'LabStock — Lab. Clínico Los Ángeles'}
       </span>
       <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8,WebkitAppRegion:'no-drag'}}>
         {profile && (
-          <span style={{fontSize:11,color:T.lo,maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          <span style={{fontSize:12,color:T.mid,fontWeight:500,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
             {profile.nombre}
           </span>
         )}
+        <button onClick={toggleTheme}
+          onMouseEnter={()=>setHovTheme(true)} onMouseLeave={()=>setHovTheme(false)}
+          title={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+          style={{background:hovTheme?T.tealXL:'transparent',
+            border:`1px solid ${hovTheme?T.tealL:T.border}`,
+            cursor:'pointer',color:hovTheme?T.tealDk:T.lo,
+            padding:'3px 8px',display:'flex',alignItems:'center',gap:5,
+            borderRadius:6,fontFamily:'inherit',fontSize:12,fontWeight:500,
+            transition:'all 0.15s',WebkitAppRegion:'no-drag'}}>
+          {isDark ? <Ico.Sun s={13}/> : <Ico.Moon s={13}/>}
+          <span>{isDark ? 'Claro' : 'Oscuro'}</span>
+        </button>
         {onSignOut && (
-          <button onClick={onSignOut} title="Cerrar sesión"
-            style={{background:'none',border:'none',cursor:'pointer',color:T.lo,padding:'2px 4px',
-              display:'flex',alignItems:'center',gap:4,borderRadius:4,fontFamily:'inherit',fontSize:11}}>
-            <Ico.LogOut s={12}/>
+          <button onClick={onSignOut}
+            onMouseEnter={()=>setHovLogout(true)} onMouseLeave={()=>setHovLogout(false)}
+            style={{background:hovLogout?T.critBg:'transparent',
+              border:`1px solid ${hovLogout?T.crit:T.border}`,
+              cursor:'pointer',color:hovLogout?T.crit:T.mid,padding:'3px 10px',
+              display:'flex',alignItems:'center',gap:5,borderRadius:6,
+              fontFamily:'inherit',fontSize:12,fontWeight:500,transition:'all 0.15s',
+              WebkitAppRegion:'no-drag'}}>
+            <Ico.LogOut s={13}/>
+            <span>Salir</span>
           </button>
         )}
-        {['#E6ECED','#E6ECED','#FF6058'].map((bg,i)=>(
-          <div key={i} style={{width:11,height:11,borderRadius:'50%',background:bg}}/>
-        ))}
+        {/* Semáforo: solo 1 encendido según estado */}
+        {(() => {
+          const dim = 'var(--border)';
+          const isGreen  = isOnline && !syncing;
+          const isYellow = syncing;
+          const isRed    = !isOnline && !syncing;
+          const label = isYellow
+            ? `Sincronizando… (${pendingOps} pendiente${pendingOps>1?'s':''})`
+            : isGreen ? 'En línea' : 'Sin conexión';
+          return (
+            <div title={label} style={{display:'flex',gap:5,alignItems:'center'}}>
+              <div style={{width:11,height:11,borderRadius:'50%',
+                background: isGreen ? T.ok : dim,
+                boxShadow: isGreen ? `0 0 6px ${T.ok}` : 'none',
+                transition:'background 0.4s, box-shadow 0.4s'}}/>
+              <div style={{width:11,height:11,borderRadius:'50%',
+                background: isYellow ? T.warn : dim,
+                boxShadow: isYellow ? `0 0 6px ${T.warn}` : 'none',
+                animation: isYellow ? 'pulse 1s infinite' : 'none',
+                transition:'background 0.4s, box-shadow 0.4s'}}/>
+              <div style={{width:11,height:11,borderRadius:'50%',
+                background: isRed ? T.crit : dim,
+                boxShadow: isRed ? `0 0 6px ${T.crit}` : 'none',
+                transition:'background 0.4s, box-shadow 0.4s'}}/>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -178,15 +227,15 @@ function NavBtn({id,label,Icon,badge,active,onNav}) {
     <button onClick={()=>onNav(id)} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'9px 10px',
         borderRadius:8,border:'none',cursor:'pointer',marginBottom:1,position:'relative',
-        background:active?T.tealXL:hov?'#F0F5F7':'transparent',
-        color:active?T.tealDk:hov?T.hi:T.mid,fontFamily:'inherit',fontSize:13.5,
+        background:active?T.tealXL:hov?'var(--nav-hover)':'transparent',
+        color:active?T.tealDk:hov?T.hi:T.mid,fontFamily:'inherit',fontSize:14,
         fontWeight:active?600:400,transition:'all 0.12s',textAlign:'left'}}>
       {active&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
         width:3,height:18,borderRadius:'0 2px 2px 0',background:T.teal}}/>}
       <Icon s={16} c={active?T.teal:undefined}/>
       <span style={{flex:1}}>{label}</span>
       {badge>0&&<span style={{minWidth:18,height:18,borderRadius:9,padding:'0 5px',
-        background:T.crit,color:'#fff',fontSize:10.5,fontWeight:700,
+        background:T.crit,color:'#fff',fontSize:11,fontWeight:700,
         display:'flex',alignItems:'center',justifyContent:'center'}}>{badge}</span>}
     </button>
   );
@@ -194,8 +243,8 @@ function NavBtn({id,label,Icon,badge,active,onNav}) {
 
 function SectionLabel({label}) {
   return (
-    <div style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',
-      letterSpacing:'0.08em',padding:'12px 10px 5px'}}>
+    <div style={{fontSize:11,fontWeight:700,color:T.lo,textTransform:'uppercase',
+      letterSpacing:'0.07em',padding:'12px 10px 5px'}}>
       {label}
     </div>
   );
@@ -246,7 +295,7 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
           <img src={logoTeal} alt="" style={{width:32,height:32,objectFit:'contain',flexShrink:0}}/>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.hi,letterSpacing:'-0.015em',lineHeight:1.2}}>LabStock</div>
-            <div style={{fontSize:10.5,color:T.lo,marginTop:2}}>Los Ángeles</div>
+            <div style={{fontSize:11.5,color:T.lo,marginTop:2}}>Los Ángeles</div>
           </div>
         </div>
       </div>
@@ -307,8 +356,8 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
       </nav>
 
       <div style={{padding:'10px 16px 14px',borderTop:`1px solid ${T.border}`}}>
-        <div style={{fontSize:11.5,fontWeight:600,color:T.mid,marginBottom:2}}>{profile?.nombre}</div>
-        <div style={{fontSize:10.5,color:T.lo}}>
+        <div style={{fontSize:12.5,fontWeight:600,color:T.mid,marginBottom:2}}>{profile?.nombre}</div>
+        <div style={{fontSize:11.5,color:T.lo}}>
           {isAdmin ? '⚑ Administrador' : isAuditor ? '◎ Auditor' : isSecretaria ? '✦ Secretaria' : profile?.sedes?.nombre || 'Técnico'}
         </div>
       </div>
@@ -319,17 +368,14 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
         borderTop:`1px solid ${T.border}`,
         display:'flex', alignItems:'center', justifyContent:'center', gap:5,
       }}>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-          stroke={T.lo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.5">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+          stroke={T.tealDk} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
         </svg>
-        <span style={{fontSize:9.5, color:T.lo, opacity:0.55, letterSpacing:'0.04em'}}>
+        <span style={{fontSize:10.5, color:T.mid, letterSpacing:'0.03em'}}>
           Desarrollado por
         </span>
-        <span style={{
-          fontSize:9.5, fontWeight:700, letterSpacing:'0.06em',
-          color: T.tealDk, opacity:0.7,
-        }}>
+        <span style={{fontSize:11, fontWeight:800, letterSpacing:'0.07em', color:T.tealDk}}>
           TELOXIS
         </span>
       </div>
@@ -381,7 +427,7 @@ function ItemFormModal({initial,onSave,onClose,sedes=[],initialSedeId=null}) {
         <Field label="Sede" error={err.sedeId}>
           <select value={f.sedeId} onChange={e=>set('sedeId',e.target.value)}
             style={{width:'100%',padding:'8px 11px',border:`1px solid ${err.sedeId?T.crit:T.border}`,
-              borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
+              borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'var(--input-bg)',
               outline:'none',boxSizing:'border-box',cursor:'pointer'}}>
             <option value="">Seleccionar sede...</option>
             {sedes.map(s=><option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -796,7 +842,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
       <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
         <div>
           <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Inventario</h1>
-          <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>{items.length} insumos registrados</p>
+          <p style={{fontSize:13,color:T.lo,marginTop:4}}>{items.length} insumos registrados</p>
         </div>
         <div style={{display:'flex',gap:8}}>
           <Btn variant="secondary" size="sm" icon={<Ico.Download s={13}/>} onClick={onExport}>Exportar</Btn>
@@ -813,7 +859,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
           <input value={filter.search} onChange={e=>setFilter(f=>({...f,search:e.target.value}))}
             placeholder="Buscar insumo o categoría..."
             style={{width:'100%',padding:'8px 12px 8px 34px',border:`1px solid ${T.border}`,
-              borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F6FAFB',
+              borderRadius:8,fontFamily:'inherit',fontSize:13,color:T.hi,background:'var(--input-bg)',
               outline:'none',boxSizing:'border-box'}}
             onFocus={e=>e.target.style.borderColor=T.teal}
             onBlur={e=>e.target.style.borderColor=T.border}/>
@@ -835,10 +881,10 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
-          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
+          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
           {['Código','Insumo','Categoría','Stock','Mín.','Estado',''].map((h,i)=>(
-            <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,
-              textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
+            <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,
+              textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
           ))}
         </div>
         {filtered.length===0?(
@@ -854,7 +900,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
               style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
                 padding:'12px 18px',alignItems:'center',
                 borderBottom:i<filtered.length-1?`1px solid ${T.border}`:'none',transition:'background 0.1s'}}
-              onMouseEnter={e=>e.currentTarget.style.background='#F5F9FB'}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--row-hover)'}
               onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
               <span style={{fontFamily:'monospace',fontSize:11.5,fontWeight:700,
                 color:item.code?T.tealDk:T.border,letterSpacing:'0.04em'}}>
@@ -909,7 +955,7 @@ function AlertasScreen({items,onUpdate,onReport}) {
       <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
         <div>
           <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Alertas</h1>
-          <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>
+          <p style={{fontSize:13,color:T.lo,marginTop:4}}>
             {all.length} insumo{all.length>1?'s':''} requieren atención
           </p>
         </div>
@@ -996,7 +1042,7 @@ function ActividadScreen({sedeId,isAdmin}) {
     <div style={{display:'flex',flexDirection:'column',gap:18}}>
       <div>
         <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Registro de actividad</h1>
-        <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>Historial de cambios en inventario</p>
+        <p style={{fontSize:13,color:T.lo,marginTop:4}}>Historial de cambios en inventario</p>
       </div>
       <div style={{position:'relative'}}>
         <span style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',
@@ -1014,10 +1060,10 @@ function ActividadScreen({sedeId,isAdmin}) {
       ):(
         <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
           <div style={{display:'grid',gridTemplateColumns:'140px 1fr 100px 80px 80px 1fr',
-            padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
+            padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
             {['Fecha','Insumo','Usuario','Acción','Cambio','Nota/Sede'].map((h,i)=>(
-              <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,
-                textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
+              <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,
+                textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
             ))}
           </div>
           {filtered.length===0?(
@@ -1029,7 +1075,7 @@ function ActividadScreen({sedeId,isAdmin}) {
               style={{display:'grid',gridTemplateColumns:'140px 1fr 100px 80px 80px 1fr',
                 padding:'11px 18px',alignItems:'center',fontSize:12,
                 borderBottom:i<filtered.length-1?`1px solid ${T.border}`:'none',
-                background:i%2===0?'transparent':'#FAFCFD'}}>
+                background:i%2===0?'transparent':'var(--row-stripe)'}}>
               <span style={{color:T.lo,fontSize:11}}>{fmt(log.created_at)}</span>
               <span style={{fontWeight:500,color:T.hi}}>{log.nombre_item}</span>
               <span style={{color:T.mid}}>{log.nombre_usuario}</span>
@@ -1190,16 +1236,16 @@ function UsuariosScreen({sedes}) {
       <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
         <div>
           <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Gestión de usuarios</h1>
-          <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>{users.length} usuario(s) registrados</p>
+          <p style={{fontSize:13,color:T.lo,marginTop:4}}>{users.length} usuario(s) registrados</p>
         </div>
         <Btn icon={<Ico.Plus s={14}/>} onClick={()=>setModal(true)}>Agregar usuario</Btn>
       </div>
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1.5fr 80px 1fr 72px',
-          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'#F4F8FA'}}>
+          padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
           {['Nombre','Código acceso','Rol','Sede',''].map((h,i)=>(
-            <span key={i} style={{fontSize:10.5,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
+            <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
           ))}
         </div>
         {loading?(
@@ -1259,7 +1305,7 @@ function UsuariosScreen({sedes}) {
             <Field label="Sede asignada">
               <select value={form.sedeId} onChange={e=>setForm(f=>({...f,sedeId:e.target.value}))}
                 style={{width:'100%',padding:'8px 11px',border:`1px solid ${T.border}`,borderRadius:8,
-                  fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
+                  fontFamily:'inherit',fontSize:13,color:T.hi,background:'var(--input-bg)',
                   outline:'none',boxSizing:'border-box',cursor:'pointer'}}>
                 <option value="">Seleccionar...</option>
                 {(form.rol==='secretaria'?sedes.filter(s=>s.permite_compras):sedes)
@@ -1334,7 +1380,7 @@ function UsuariosScreen({sedes}) {
                 <Field label="Sede asignada">
                   <select value={editForm.sedeId} onChange={e=>setEditForm(f=>({...f,sedeId:e.target.value}))}
                     style={{width:'100%',padding:'8px 11px',border:`1px solid ${T.border}`,borderRadius:8,
-                      fontFamily:'inherit',fontSize:13,color:T.hi,background:'#F8FAFB',
+                      fontFamily:'inherit',fontSize:13,color:T.hi,background:'var(--input-bg)',
                       outline:'none',boxSizing:'border-box',cursor:'pointer'}}>
                     <option value="">Seleccionar...</option>
                     {(editForm.rol==='secretaria'?sedes.filter(s=>s.permite_compras):sedes)
@@ -1467,9 +1513,9 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
           <div style={{border:`1px solid ${T.border}`,borderRadius:8,maxHeight:280,overflowY:'auto'}}>
             {/* header */}
             <div style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',padding:'7px 12px',
-              background:'#F4F8FA',borderBottom:`1px solid ${T.border}`}}>
+              background:'var(--table-head-bg)',borderBottom:`1px solid ${T.border}`}}>
               {['','Insumo','Estado','Cant.'].map((h,i)=>(
-                <span key={i} style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.07em'}}>{h}</span>
+                <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
               ))}
             </div>
             {sorted.map((item,i)=>{
@@ -1537,7 +1583,7 @@ function PedidoCard({pedido,expanded,onToggle,onUpdateStatus,canManageIncoming,c
       <div onClick={onToggle}
         style={{display:'grid',gridTemplateColumns:'110px 1.4fr 1fr auto 22px',
           padding:'13px 18px',alignItems:'center',gap:12,cursor:'pointer',transition:'background 0.1s'}}
-        onMouseEnter={e=>e.currentTarget.style.background='#F5F9FB'}
+        onMouseEnter={e=>e.currentTarget.style.background='var(--row-hover)'}
         onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
         <span style={{fontFamily:'monospace',fontSize:13,fontWeight:700,color:T.tealDk}}>{pedido.referencia}</span>
         <div>
@@ -1743,7 +1789,7 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
       <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
         <div>
           <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Pedidos</h1>
-          <p style={{fontSize:12.5,color:T.lo,marginTop:4}}>Sistema de reabastecimiento entre sedes</p>
+          <p style={{fontSize:13,color:T.lo,marginTop:4}}>Sistema de reabastecimiento entre sedes</p>
         </div>
         {currentSedeId?(
           <Btn icon={<Ico.Cart s={14}/>} onClick={onShowCart}>Nuevo pedido</Btn>
@@ -1811,14 +1857,18 @@ const toEmail = c => c.trim().toLowerCase() + DOMAIN;
 
 function LoginScreen() {
   const {signIn}=useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const [codigo,setCodigo]=useState('');
   const [password,setPassword]=useState('');
+  const [showPwd,setShowPwd]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
+  const [hovTheme,setHovTheme]=useState(false);
 
   const login=async(e)=>{
     e.preventDefault();
-    if(!codigo.trim()||!password.trim()){setError('Ingresa tu código y contraseña.');return;}
+    if(!codigo.trim()){setError('Ingresa tu usuario.');return;}
+    if(password.length<2){setError('La contraseña debe tener al menos 2 caracteres.');return;}
     setLoading(true); setError('');
     const {error:err}=await signIn(toEmail(codigo),password);
     setLoading(false);
@@ -1832,27 +1882,59 @@ function LoginScreen() {
   };
 
   return (
-    <div style={{minHeight:'100vh',background:T.canvas,display:'flex',
-      alignItems:'center',justifyContent:'center',padding:20}}>
+    <div style={{minHeight:'100vh',background:T.canvas,display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',padding:20,position:'relative'}}>
+
+      {/* Botón de tema — esquina superior derecha */}
+      <button onClick={toggleTheme}
+        onMouseEnter={()=>setHovTheme(true)} onMouseLeave={()=>setHovTheme(false)}
+        title={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+        style={{position:'fixed',top:12,right:16,
+          background:hovTheme?T.tealXL:'transparent',
+          border:`1px solid ${hovTheme?T.tealL:T.border}`,
+          cursor:'pointer',color:hovTheme?T.tealDk:T.lo,
+          padding:'5px 12px',display:'flex',alignItems:'center',gap:6,
+          borderRadius:8,fontFamily:'inherit',fontSize:12.5,fontWeight:500,
+          transition:'all 0.15s',zIndex:10}}>
+        {isDark ? <Ico.Sun s={14}/> : <Ico.Moon s={14}/>}
+        <span>{isDark ? 'Tema claro' : 'Tema oscuro'}</span>
+      </button>
+
+      {/* Tarjeta de login */}
       <div style={{background:T.surface,borderRadius:16,padding:'40px 36px',width:'100%',maxWidth:380,
-        boxShadow:'0 20px 60px rgba(0,0,0,0.12)',border:`1px solid ${T.border}`}}>
+        boxShadow:'0 20px 60px rgba(0,0,0,0.18)',border:`1px solid ${T.border}`}}>
 
         <div style={{textAlign:'center',marginBottom:32}}>
-          <img src={logoTeal} alt="" style={{width:52,height:52,objectFit:'contain',marginBottom:12}}/>
-          <div style={{fontSize:22,fontWeight:700,color:T.hi,letterSpacing:'-0.025em'}}>LabStock</div>
-          <div style={{fontSize:12.5,color:T.lo,marginTop:4}}>Laboratorio Clínico Los Ángeles</div>
+          <img src={logoTeal} alt="" style={{width:130,height:130,objectFit:'contain',marginBottom:18}}/>
+          <div style={{fontSize:26,fontWeight:700,color:T.hi,letterSpacing:'-0.025em'}}>LabStock</div>
+          <div style={{fontSize:13,color:T.lo,marginTop:5}}>Laboratorio Clínico Los Ángeles</div>
         </div>
 
         <form onSubmit={login}>
-          <Field label="Código de acceso">
+          <Field label="Usuario">
             <TInput value={codigo}
               onChange={e=>{setCodigo(e.target.value.toLowerCase());setError('');}}
-              placeholder="Ej: sta01 · adm · maria.garcia" focusOnMount/>
+              placeholder="Ingresa tu usuario" focusOnMount/>
           </Field>
           <Field label="Contraseña">
-            <TInput type="password" value={password}
-              onChange={e=>{setPassword(e.target.value);setError('');}}
-              placeholder="••••••••"/>
+            <div style={{position:'relative'}}>
+              <input
+                type={showPwd?'text':'password'}
+                value={password}
+                onChange={e=>{setPassword(e.target.value);setError('');}}
+                placeholder="Ingresa tu contraseña"
+                style={{width:'100%',padding:'9px 42px 9px 12px',
+                  border:`1px solid ${T.border}`,borderRadius:8,
+                  fontFamily:'inherit',fontSize:13,color:'var(--text-hi)',
+                  background:'var(--input-bg)',outline:'none',boxSizing:'border-box'}}/>
+              <button type="button" onClick={()=>setShowPwd(p=>!p)}
+                tabIndex={-1}
+                style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',
+                  background:'none',border:'none',cursor:'pointer',
+                  color:'var(--text-lo)',padding:4,display:'flex',alignItems:'center'}}>
+                {showPwd ? <Ico.EyeOff s={16}/> : <Ico.Eye s={16}/>}
+              </button>
+            </div>
           </Field>
 
           {error&&(
@@ -1869,10 +1951,24 @@ function LoginScreen() {
           </button>
         </form>
 
-        <p style={{textAlign:'center',fontSize:11,color:T.lo,marginTop:20,lineHeight:1.5}}>
+        <p style={{textAlign:'center',fontSize:12,color:T.lo,marginTop:20,lineHeight:1.6}}>
           Sistema de gestión de inventario<br/>
           Acceso restringido al personal autorizado
         </p>
+      </div>
+
+      {/* Sello TELOXIS — centrado debajo de la tarjeta */}
+      <div style={{marginTop:28,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+          stroke={T.tealDk} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span style={{fontSize:13,color:T.mid,letterSpacing:'0.04em'}}>
+          Desarrollado por
+        </span>
+        <span style={{fontSize:14,fontWeight:800,letterSpacing:'0.1em',color:T.tealDk}}>
+          TELOXIS
+        </span>
       </div>
     </div>
   );
@@ -1900,6 +1996,16 @@ export default function App() {
   const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
   const currentSedeId = isAdmin ? selectedSede : profile?.sede_id;
   const currentSedeName = sedes.find(s=>s.id===currentSedeId)?.nombre || (isAdmin&&!currentSedeId?null:profile?.sedes?.nombre);
+
+  // Resetear a inicio en cada nuevo login
+  const prevProfileId = useRef(null);
+  useEffect(()=>{
+    if(profile?.id && profile.id !== prevProfileId.current){
+      setView('inicio');
+      prevProfileId.current = profile.id;
+    }
+    if(!profile) prevProfileId.current = null;
+  },[profile]);
 
   // Auditor: solo puede ver auditoria, caja_historial, compras
   useEffect(()=>{
@@ -2151,7 +2257,7 @@ export default function App() {
           {view==="auditoria"&&isAuditor&&(
             <AuditorDashboard onGoHistorial={()=>setView('caja_historial')}/>
           )}
-          {view==="caja_dia"&&!isAuditor&&(
+          {view==="caja_dia"&&cajaPerm&&!isAuditor&&(
             <CajaScreen
               profile={profile} isAdmin={isAdmin}
               currentSedeId={currentSedeId}
@@ -2159,7 +2265,7 @@ export default function App() {
               sedes={sedes}
               onSedeChange={setSede}/>
           )}
-          {view==="caja_historial"&&(
+          {view==="caja_historial"&&cajaPerm&&(
             <HistorialCajaScreen
               profile={profile} isAdmin={isAdmin} sedes={sedes}/>
           )}

@@ -92,7 +92,7 @@ function ProveedorSelect({ organizacionId, value, onChange, onRequestAdd }) {
           placeholder="Seleccionar proveedor..."
           style={{ flex:1, padding:'8px 36px 8px 32px', border:`1px solid ${value ? T.teal : T.border}`,
             borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-            background: value ? T.tealXL : '#F8FAFB', outline:'none',
+            background: value ? T.tealXL : 'var(--input-bg)', outline:'none',
             cursor: value ? 'default' : 'text' }}
         />
         {value && (
@@ -182,7 +182,7 @@ function ItemSearch({ sedeId, excludeIds, onAdd }) {
         disabled={!sedeId}
         style={{ width:'100%', padding:'8px 12px 8px 32px', border:`1px solid ${T.border}`,
           borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-          background: sedeId ? '#F8FAFB' : T.canvas, outline:'none', boxSizing:'border-box',
+          background: sedeId ? 'var(--input-bg)' : T.canvas, outline:'none', boxSizing:'border-box',
           cursor: sedeId ? 'text' : 'not-allowed' }}/>
       {open && results.length > 0 && (
         <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:60, marginTop:4,
@@ -221,7 +221,7 @@ function FreeItemRow({ onAdd }) {
   };
 
   return (
-    <div style={{ background:'#FFFBEB', border:`1px solid #FDE68A`, borderRadius:8,
+    <div style={{ background:T.warnBg, border:`1px solid ${T.warn}55`, borderRadius:8,
       padding:'10px 12px', marginTop:8 }}>
       <div style={{ fontSize:11, fontWeight:700, color:'#92400E', marginBottom:8,
         textTransform:'uppercase', letterSpacing:'0.06em' }}>
@@ -260,7 +260,7 @@ function LineItems({ lines, onChange, onRemove, readOnly }) {
   return (
     <div style={{ border:`1px solid ${T.border}`, borderRadius:8, overflow:'hidden', marginBottom:12 }}>
       <div style={{ display:'grid', gridTemplateColumns:cols, padding:'7px 12px',
-        background:'#F4F8FA', borderBottom:`1px solid ${T.border}` }}>
+        background:'var(--table-head-bg)', borderBottom:`1px solid ${T.border}` }}>
         {['Producto','Cant.','Unidad','Categoría'].map((h,i) => (
           <span key={i} style={{ fontSize:10, fontWeight:700, color:T.lo,
             textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>
@@ -285,12 +285,13 @@ function LineItems({ lines, onChange, onRemove, readOnly }) {
             <input type="text" inputMode="numeric" value={line.cantidad}
               onChange={e => onChange({ ...line, cantidad:e.target.value })}
               style={{ padding:'5px 8px', border:`1px solid ${T.border}`, borderRadius:6,
-                fontFamily:'inherit', fontSize:13, color:T.hi, background:'#F8FAFB',
+                fontFamily:'inherit', fontSize:13, color:T.hi, background:'var(--input-bg)',
                 outline:'none', textAlign:'right', width:'100%', boxSizing:'border-box' }}/>
           )}
           <div style={{ fontSize:12, color:T.mid }}>{line.unidad || '—'}</div>
           <div>
-            <span style={{ background:'#F0F9FF', color:T.tealDk, padding:'2px 7px',
+            <span style={{ background:T.tealXL, color:T.tealDk,
+              border:`1px solid ${T.tealL}`, padding:'2px 7px',
               borderRadius:12, fontSize:11 }}>
               {CAT_LABEL[line.categoria] || line.categoria || '—'}
             </span>
@@ -419,7 +420,7 @@ function NuevaCompraModal({ profile, sedes, onSave, onClose, onGoProveedores }) 
         <Field label="Sede que registra la compra">
           <select value={sedeId} onChange={e => setSedeId(e.target.value)}
             style={{ width:'100%', padding:'8px 11px', border:`1px solid ${T.border}`, borderRadius:8,
-              fontFamily:'inherit', fontSize:13, color:T.hi, background:'#F8FAFB',
+              fontFamily:'inherit', fontSize:13, color:T.hi, background:'var(--input-bg)',
               outline:'none', boxSizing:'border-box', cursor:'pointer' }}>
             <option value="">Seleccionar sede...</option>
             {sedesHab.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
@@ -494,7 +495,7 @@ function NuevaCompraModal({ profile, sedes, onSave, onClose, onGoProveedores }) 
               placeholder="0.00"
               style={{ width:'100%', padding:'8px 11px 8px 24px', border:`1px solid ${T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-                background:'#F8FAFB', outline:'none', boxSizing:'border-box' }}/>
+                background:'var(--input-bg)', outline:'none', boxSizing:'border-box' }}/>
           </div>
         </Field>
         <Field label="Condición de pago *">
@@ -627,7 +628,7 @@ function ProveedoresTab({ profile, canEdit }) {
 
       <div style={{ background:T.surface, borderRadius:12, border:`1px solid ${T.border}`, overflow:'hidden' }}>
         <div style={{ display:'grid', gridTemplateColumns:'100px 1.5fr 110px 1fr 72px',
-          padding:'8px 18px', background:'#F4F8FA', borderBottom:`1px solid ${T.border}` }}>
+          padding:'8px 18px', background:'var(--table-head-bg)', borderBottom:`1px solid ${T.border}` }}>
           {['Código','Nombre','NIT','Teléfono / Correo',''].map((h,i) => (
             <span key={i} style={{ fontSize:10.5, fontWeight:700, color:T.lo,
               textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>
@@ -792,7 +793,7 @@ function EditCompraModal({ profile, compra, onSave, onClose }) {
               onChange={e => set('monto_total', e.target.value)} placeholder="0.00"
               style={{ width:'100%', padding:'8px 11px 8px 24px', border:`1px solid ${T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-                background:'#F8FAFB', outline:'none', boxSizing:'border-box' }}/>
+                background:'var(--input-bg)', outline:'none', boxSizing:'border-box' }}/>
           </div>
         </Field>
         <Field label="Condición de pago *">
@@ -851,9 +852,13 @@ function CompraDetail({ compra, isAdmin, onBack, onEdit, onDelete }) {
       {/* Barra superior */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <button onClick={onBack}
-          style={{ display:'flex', alignItems:'center', gap:6, background:'none', border:'none',
-            cursor:'pointer', fontFamily:'inherit', fontSize:13, color:T.mid, padding:'4px 0' }}>
-          ‹ Volver a facturas
+          style={{ display:'flex', alignItems:'center', gap:6,
+            background:'transparent', border:`1px solid ${T.border}`,
+            cursor:'pointer', fontFamily:'inherit', fontSize:13.5, fontWeight:500,
+            color:T.mid, padding:'6px 14px', borderRadius:8, transition:'all 0.12s' }}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.color=T.tealDk;}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.mid;}}>
+          <Ico.ChevronLeft s={15}/> Volver a facturas
         </button>
         {isAdmin && (
           <div style={{ display:'flex', gap:8 }}>
@@ -882,15 +887,17 @@ function CompraDetail({ compra, isAdmin, onBack, onEdit, onDelete }) {
               {compra.numero_factura && <span>Factura #{compra.numero_factura}</span>}
               <span>{TIPO_DOC_LABEL[compra.tipo_documento] || compra.tipo_documento}</span>
               {compra.cadena_frio && (
-                <span style={{ background:'#EFF6FF', color:'#1D4ED8', padding:'2px 8px',
-                  borderRadius:10, fontSize:11, fontWeight:600 }}>❄ Cadena de frío</span>
+                <span style={{ background:'rgba(37,99,235,0.15)', color:'#60A5FA',
+                  border:'1px solid rgba(37,99,235,0.35)',
+                  padding:'2px 8px', borderRadius:10, fontSize:11, fontWeight:600 }}>❄ Cadena de frío</span>
               )}
             </div>
           </div>
           <div style={{ flexShrink:0 }}>
             {compra.tipo_pago === 'credito'
-              ? <span style={{ background:'#EEF2FF', color:'#3730A3', padding:'5px 14px',
-                  borderRadius:12, fontSize:12, fontWeight:700 }}>Crédito</span>
+              ? <span style={{ background:'rgba(99,102,241,0.15)', color:'#818CF8',
+                  border:'1px solid rgba(99,102,241,0.35)',
+                  padding:'5px 14px', borderRadius:12, fontSize:12, fontWeight:700 }}>Crédito</span>
               : <span style={{ background:T.okBg, color:T.ok, padding:'5px 14px',
                   borderRadius:12, fontSize:12, fontWeight:700 }}>Contado</span>}
           </div>
@@ -972,13 +979,18 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('compras')
+    let q = supabase.from('compras')
       .select('*, proveedores(nombre,codigo_interno,nit,telefono,correo), sedes(nombre), compra_items(*), registrador:registrado_por(nombre)')
       .order('fecha_recepcion', { ascending:false })
       .order('created_at', { ascending:false });
+    // Secretaria y técnico: solo ven compras de su propia sede
+    if (!isAdmin && !isAuditor && profile?.sede_id) {
+      q = q.eq('sede_id', profile.sede_id);
+    }
+    const { data } = await q;
     setCompras(data || []);
     setLoading(false);
-  }, []);
+  }, [isAdmin, isAuditor, profile?.sede_id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1091,7 +1103,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                 <strong>{delCompra.proveedores?.nombre || 'este proveedor'}</strong>
                 {delCompra.numero_factura ? ` (Factura #${delCompra.numero_factura})` : ''}?
               </p>
-              <div style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:8,
+              <div style={{ background:T.warnBg, border:`1px solid ${T.warn}55`, borderRadius:8,
                 padding:'10px 14px', marginBottom:20 }}>
                 <div style={{ fontSize:12, color:'#92400E', fontWeight:700, marginBottom:4 }}>⚠ Importante</div>
                 <div style={{ fontSize:12, color:'#92400E', lineHeight:1.5 }}>
@@ -1189,7 +1201,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                   placeholder="Buscar por proveedor o no. factura..."
                   style={{ width:'100%', padding:'8px 12px 8px 34px', border:`1px solid ${T.border}`,
                     borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-                    background:'#F8FAFB', outline:'none', boxSizing:'border-box' }}
+                    background:'var(--input-bg)', outline:'none', boxSizing:'border-box' }}
                   onFocus={e => e.target.style.borderColor = T.teal}
                   onBlur={e => e.target.style.borderColor = T.border}/>
               </div>
@@ -1215,19 +1227,19 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                 <label style={{ fontSize:11.5, fontWeight:600, color:T.lo, whiteSpace:'nowrap' }}>Desde</label>
                 <input type="date" value={filterDesde} onChange={e => setFDesde(e.target.value)}
                   style={{ padding:'6px 10px', border:`1px solid ${T.border}`, borderRadius:8,
-                    fontFamily:'inherit', fontSize:12.5, color:T.hi, background:'#F8FAFB', outline:'none' }}/>
+                    fontFamily:'inherit', fontSize:12.5, color:T.hi, background:'var(--input-bg)', outline:'none' }}/>
               </div>
               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                 <label style={{ fontSize:11.5, fontWeight:600, color:T.lo, whiteSpace:'nowrap' }}>Hasta</label>
                 <input type="date" value={filterHasta} onChange={e => setFHasta(e.target.value)}
                   style={{ padding:'6px 10px', border:`1px solid ${T.border}`, borderRadius:8,
-                    fontFamily:'inherit', fontSize:12.5, color:T.hi, background:'#F8FAFB', outline:'none' }}/>
+                    fontFamily:'inherit', fontSize:12.5, color:T.hi, background:'var(--input-bg)', outline:'none' }}/>
               </div>
               {proveedoresUnicos.length > 0 && (
                 <select value={filterProv} onChange={e => setFProv(e.target.value)}
                   style={{ padding:'6px 10px', border:`1px solid ${filterProv ? T.teal : T.border}`,
                     borderRadius:8, fontFamily:'inherit', fontSize:12.5, color:T.hi,
-                    background: filterProv ? T.tealXL : '#F8FAFB', outline:'none', cursor:'pointer' }}>
+                    background: filterProv ? T.tealXL : 'var(--input-bg)', outline:'none', cursor:'pointer' }}>
                   <option value="">Todos los proveedores</option>
                   {proveedoresUnicos.map(p => (
                     <option key={p.id} value={p.id}>{p.nombre}</option>
@@ -1238,7 +1250,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                 <select value={filterSede} onChange={e => setFilterSede(e.target.value)}
                   style={{ padding:'6px 10px', border:`1px solid ${filterSede ? T.teal : T.border}`,
                     borderRadius:8, fontFamily:'inherit', fontSize:12.5, color:T.hi,
-                    background: filterSede ? T.tealXL : '#F8FAFB', outline:'none', cursor:'pointer' }}>
+                    background: filterSede ? T.tealXL : 'var(--input-bg)', outline:'none', cursor:'pointer' }}>
                   <option value="">Todas las sedes</option>
                   {sedesHab.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
@@ -1248,7 +1260,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
 
           <div style={{ background:T.surface, borderRadius:12, border:`1px solid ${T.border}`, overflow:'hidden' }}>
             <div style={{ display:'grid', gridTemplateColumns:cols, padding:'8px 18px',
-              background:'#F4F8FA', borderBottom:`1px solid ${T.border}` }}>
+              background:'var(--table-head-bg)', borderBottom:`1px solid ${T.border}` }}>
               {['Proveedor','Fecha',...(showSede?['Sede']:[]),'Monto','Pago','Vencimiento',''].map((h,i) => (
                 <span key={i} style={{ fontSize:10.5, fontWeight:700, color:T.lo,
                   textTransform:'uppercase', letterSpacing:'0.07em' }}>{h}</span>
@@ -1275,7 +1287,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                   style={{ display:'grid', gridTemplateColumns:cols, padding:'13px 18px',
                     alignItems:'center', gap:12, cursor:'pointer', transition:'background 0.1s',
                     borderBottom: i < filtered.length-1 ? `1px solid ${T.border}` : 'none' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#F5F9FB'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--row-hover)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <div>
                     <div style={{ fontSize:13, fontWeight:600, color:T.hi }}>
@@ -1292,7 +1304,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                   <div style={{ fontSize:13, fontWeight:700, color:T.hi }}>{fmtQ(c.monto_total)}</div>
                   <div>
                     {c.tipo_pago==='credito'
-                      ? <span style={{ background:'#EEF2FF', color:'#3730A3', padding:'3px 8px', borderRadius:12, fontSize:11, fontWeight:600 }}>Crédito</span>
+                      ? <span style={{ background:'rgba(99,102,241,0.15)', color:'#818CF8', border:'1px solid rgba(99,102,241,0.35)', padding:'3px 8px', borderRadius:12, fontSize:11, fontWeight:600 }}>Crédito</span>
                       : <span style={{ background:T.okBg, color:T.ok, padding:'3px 8px', borderRadius:12, fontSize:11, fontWeight:600 }}>Contado</span>}
                   </div>
                   <div>

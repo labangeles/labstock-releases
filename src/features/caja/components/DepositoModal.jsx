@@ -34,7 +34,7 @@ export function DepositoModal({ onSave, onClose, saving }) {
         <select value={f.banco} onChange={e=>set('banco',e.target.value)}
           style={{ width:'100%', padding:'8px 11px', border:`1px solid ${err.banco?T.crit:T.border}`,
             borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-            background:'#F8FAFB', outline:'none', boxSizing:'border-box', cursor:'pointer' }}>
+            background:'var(--input-bg)', outline:'none', boxSizing:'border-box', cursor:'pointer' }}>
           {BANCOS.map(b=><option key={b} value={b}>{b}</option>)}
         </select>
       </Field>
@@ -53,7 +53,7 @@ export function DepositoModal({ onSave, onClose, saving }) {
               style={{ width:'100%', padding:'8px 11px 8px 26px',
                 border:`1px solid ${err.monto?T.crit:T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:13, color:T.hi,
-                background:'#F8FAFB', outline:'none', boxSizing:'border-box' }} />
+                background:'var(--input-bg)', outline:'none', boxSizing:'border-box' }} />
           </div>
         </Field>
       </div>
