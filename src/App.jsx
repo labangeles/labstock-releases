@@ -1267,6 +1267,15 @@ function UsuariosScreen({sedes}) {
                 {u.activo&&(
                   <IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>openEdit(u)} title="Editar rol y permisos"/>
                 )}
+                {u.activo && u.machine_id && (
+                  <IconBtn icon={<Ico.Unlock s={13}/>} title="Resetear dispositivo vinculado"
+                    onClick={async()=>{
+                      if(!window.confirm(`¿Resetear el dispositivo de ${u.nombre}? Podrá iniciar sesión desde cualquier PC una vez.`)) return;
+                      const r = await window.electronAPI?.resetMachineId(u.id);
+                      if(r?.error){ showToast('❌ '+r.error); return; }
+                      load(); showToast('✅ Dispositivo reseteado — el usuario podrá registrar un nuevo equipo');
+                    }}/>
+                )}
                 {u.activo&&(
                   <IconBtn icon={<Ico.Trash s={13}/>} danger onClick={()=>disable(u)}/>
                 )}
@@ -1850,6 +1859,45 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PANTALLA: DISPOSITIVO BLOQUEADO
+═══════════════════════════════════════════════════════════ */
+function DispositivoBloqueadoScreen({ onSignOut }) {
+  return (
+    <div style={{minHeight:'100vh',background:T.canvas,display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{background:T.surface,borderRadius:16,padding:'40px 36px',width:'100%',maxWidth:400,
+        boxShadow:'0 20px 60px rgba(0,0,0,0.18)',border:`1px solid ${T.crit}44`,textAlign:'center'}}>
+        <div style={{width:60,height:60,borderRadius:'50%',background:T.critBg,
+          display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
+          <Ico.Lock s={28} c={T.crit}/>
+        </div>
+        <div style={{fontSize:18,fontWeight:700,color:T.hi,marginBottom:8}}>
+          Dispositivo no autorizado
+        </div>
+        <div style={{fontSize:13,color:T.mid,lineHeight:1.6,marginBottom:24}}>
+          Tu usuario está registrado en otro dispositivo.<br/>
+          Contacta al administrador para autorizar este equipo.
+        </div>
+        <button onClick={onSignOut}
+          style={{width:'100%',padding:'10px 16px',background:T.critBg,color:T.crit,
+            border:`1px solid ${T.crit}44`,borderRadius:8,fontFamily:'inherit',
+            fontSize:13,fontWeight:600,cursor:'pointer'}}>
+          Cerrar sesión
+        </button>
+        <div style={{marginTop:20,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke={T.tealDk} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <span style={{fontSize:11,color:T.lo}}>Desarrollado por </span>
+          <span style={{fontSize:11,fontWeight:800,color:T.tealDk}}>TELOXIS</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
    PANTALLA: LOGIN
 ═══════════════════════════════════════════════════════════ */
 const DOMAIN = '@labstock.gt';
@@ -1980,15 +2028,16 @@ function LoginScreen() {
 export default function App() {
   const {session,profile,sedes,loading:authLoading,signOut}=useAuth();
 
-  const [items,setItems]       = useState([]);
-  const [itemsBySede,setIBS]   = useState({});
-  const [view,setView]         = useState("inicio");
-  const [modal,setModal]       = useState(null);
-  const [sel,setSel]           = useState(null);
-  const [filter,setFilter]     = useState({search:"",status:"Todos"});
-  const [dbLoading,setDbL]     = useState(false);
-  const [selectedSede,setSede] = useState(null);
+  const [items,setItems]           = useState([]);
+  const [itemsBySede,setIBS]       = useState({});
+  const [view,setView]             = useState("inicio");
+  const [modal,setModal]           = useState(null);
+  const [sel,setSel]               = useState(null);
+  const [filter,setFilter]         = useState({search:"",status:"Todos"});
+  const [dbLoading,setDbL]         = useState(false);
+  const [selectedSede,setSede]     = useState(null);
   const [pedidosBadge,setPedBadge] = useState(0);
+  const [machineBlocked,setMachineBlocked] = useState(false);
 
   const isAdmin      = profile?.rol==='admin';
   const isAuditor    = profile?.rol==='auditor';
@@ -1996,6 +2045,26 @@ export default function App() {
   const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
   const currentSedeId = isAdmin ? selectedSede : profile?.sede_id;
   const currentSedeName = sedes.find(s=>s.id===currentSedeId)?.nombre || (isAdmin&&!currentSedeId?null:profile?.sedes?.nombre);
+
+  // ── Binding de máquina ──────────────────────────────────
+  useEffect(() => {
+    if (!profile || !window.electronAPI?.getMachineId) return;
+    if (profile.rol === 'admin' || profile.rol === 'auditor') return; // exentos
+    let cancelled = false;
+    (async () => {
+      const machineId = await window.electronAPI.getMachineId();
+      if (!machineId || cancelled) return;
+      if (!profile.machine_id) {
+        // Primer login en este dispositivo — registrar
+        await supabase.from('profiles').update({ machine_id: machineId }).eq('id', profile.id);
+      } else if (profile.machine_id !== machineId) {
+        // Dispositivo diferente al registrado — bloquear
+        await signOut();
+        if (!cancelled) setMachineBlocked(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.id]);
 
   // Resetear a inicio en cada nuevo login
   const prevProfileId = useRef(null);
@@ -2190,6 +2259,7 @@ export default function App() {
     </div>
   );
 
+  if(machineBlocked) return <DispositivoBloqueadoScreen onSignOut={()=>setMachineBlocked(false)}/>;
   if(!session||!profile) return <LoginScreen/>;
 
   return (

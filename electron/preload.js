@@ -9,11 +9,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('update-alert-badge', count),
   platform: process.platform,
   // Archivos nativos (exportar / importar)
-  saveFile: (data) => ipcRenderer.invoke('save-file', data),
-  saveXlsx: (data) => ipcRenderer.invoke('save-xlsx', data),
-  openFile: () => ipcRenderer.invoke('open-file'),
+  saveFile:  (data) => ipcRenderer.invoke('save-file',  data),
+  saveXlsx:  (data) => ipcRenderer.invoke('save-xlsx',  data),
+  openFile:  ()     => ipcRenderer.invoke('open-file'),
   // Gestión de usuarios (admin, usa service role en main process)
-  createUser:  (data)   => ipcRenderer.invoke('create-user',  data),
-  updateUser:  (data)   => ipcRenderer.invoke('update-user',  data),
-  disableUser: (userId) => ipcRenderer.invoke('disable-user', userId),
+  createUser:     (data)   => ipcRenderer.invoke('create-user',   data),
+  updateUser:     (data)   => ipcRenderer.invoke('update-user',   data),
+  disableUser:    (userId) => ipcRenderer.invoke('disable-user',  userId),
+  // Seguridad — binding de máquina
+  getMachineId:   ()       => ipcRenderer.invoke('get-machine-id'),
+  resetMachineId: (userId) => ipcRenderer.invoke('reset-machine-id', userId),
 })

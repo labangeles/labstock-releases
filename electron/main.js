@@ -60,6 +60,30 @@ function createWindow() {
     mainWindow.focus()
   })
 
+  // ── SEGURIDAD: bloquear DevTools en producción ──────────
+  if (!isDev) {
+    mainWindow.webContents.on('devtools-opened', () => {
+      mainWindow.webContents.closeDevTools()
+    })
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      const blocked =
+        input.key === 'F12' ||
+        (input.control && input.shift && ['I','J','C','U'].includes(input.key.toUpperCase()))
+      if (blocked) event.preventDefault()
+    })
+    // Deshabilitar menú contextual (inspeccionar elemento)
+    mainWindow.webContents.on('context-menu', (e) => e.preventDefault())
+  }
+
+  // ── SEGURIDAD: bloquear navegación a URLs externas ──────
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isLocal = url.startsWith('file://') || url.startsWith('http://localhost')
+    if (!isLocal) event.preventDefault()
+  })
+
+  // ── SEGURIDAD: bloquear window.open() ───────────────────
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+
   mainWindow.on('close', (e) => {
     if (tray && !app.isQuitting) {
       e.preventDefault()
@@ -238,6 +262,33 @@ ipcMain.handle('update-user', async (_, { userId, nombre, rol, sedeId, permisos 
     }
     const { error } = await admin.from('profiles').update(profileUpdate).eq('id', userId)
     if (error) return { error: error.message }
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
+/* ── IPC: MACHINE ID ────────────────────────────────────── */
+ipcMain.handle('get-machine-id', async () => {
+  try {
+    const { machineIdSync } = require('node-machine-id')
+    return machineIdSync(true)
+  } catch {
+    return null
+  }
+})
+
+/* ── IPC: RESETEAR MACHINE ID DE UN USUARIO (solo admin) ── */
+ipcMain.handle('reset-machine-id', async (_, userId) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Sin credenciales de servicio.' }
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    await admin.from('profiles').update({ machine_id: null }).eq('id', userId)
     return { success: true }
   } catch (e) {
     return { error: e.message }
