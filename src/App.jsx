@@ -1751,6 +1751,8 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
   const [tab,setTab]=useState('entrantes');
   const [expandedId,setExpandedId]=useState(null);
   const [saving,setSaving]=useState(false);
+  const [toast,setToast]=useState('');
+  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),4000);};
 
   const santaLuciaId=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME)?.id;
   const isSantaLucia=currentSedeId===santaLuciaId;
@@ -1795,16 +1797,32 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
       .update({estado:newStatus,updated_by:profile.id})
       .eq('id',pedido.id);
 
-    /* Enviado (interno): descontar de Santa Lucía */
+    let skipped=0;
+
+    /* Enviado (interno): descontar de la sede que surte (sede_destino = Santa Lucía) */
     if(newStatus==='enviado' && pedido.tipo==='interna'){
       for(const item of (pedido.pedido_items||[])){
-        if(!item.item_codigo) continue;
-        const {data:ex}=await supabase.from('items')
-          .select('id,cantidad_actual')
-          .eq('codigo',item.item_codigo)
-          .eq('sede_id',pedido.sede_destino_id)
-          .eq('activo',true)
-          .maybeSingle();
+        let ex=null;
+        // 1° buscar por código en la sede que surte
+        if(item.item_codigo){
+          const {data}=await supabase.from('items')
+            .select('id,cantidad_actual')
+            .eq('codigo',item.item_codigo)
+            .eq('sede_id',pedido.sede_destino_id)
+            .eq('activo',true)
+            .maybeSingle();
+          ex=data;
+        }
+        // 2° fallback: buscar por nombre exacto
+        if(!ex && item.nombre_item){
+          const {data}=await supabase.from('items')
+            .select('id,cantidad_actual')
+            .ilike('nombre',item.nombre_item)
+            .eq('sede_id',pedido.sede_destino_id)
+            .eq('activo',true)
+            .maybeSingle();
+          ex=data;
+        }
         if(ex){
           const newQty=Math.max(0, ex.cantidad_actual - item.cantidad_solicitada);
           await supabase.from('items').update({cantidad_actual:newQty}).eq('id',ex.id);
@@ -1815,20 +1833,37 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
             'actualizar', ex.cantidad_actual, newQty,
             `Pedido ${pedido.referencia} despachado a ${pedido.sede_origen?.nombre}`
           );
+        } else {
+          skipped++;
         }
       }
+      if(skipped>0)
+        showToast(`⚠️ ${skipped} insumo(s) no encontrados en ${pedido.sede_destino?.nombre||'bodega'} — stock no descontado`);
     }
 
-    /* Recibido: sumar stock a la sede que solicitó */
+    /* Recibido: sumar stock a la sede que solicitó (sede_origen) */
     if(newStatus==='recibido'){
       for(const item of (pedido.pedido_items||[])){
-        if(!item.item_codigo) continue;
-        const {data:ex}=await supabase.from('items')
-          .select('id,cantidad_actual')
-          .eq('codigo',item.item_codigo)
-          .eq('sede_id',pedido.sede_origen_id)
-          .eq('activo',true)
-          .maybeSingle();
+        let ex=null;
+        // 1° por item_id directo (más fiable — apunta al item exacto de la sede solicitante)
+        if(item.item_id){
+          const {data}=await supabase.from('items')
+            .select('id,cantidad_actual')
+            .eq('id',item.item_id)
+            .eq('activo',true)
+            .maybeSingle();
+          ex=data;
+        }
+        // 2° fallback por código
+        if(!ex && item.item_codigo){
+          const {data}=await supabase.from('items')
+            .select('id,cantidad_actual')
+            .eq('codigo',item.item_codigo)
+            .eq('sede_id',pedido.sede_origen_id)
+            .eq('activo',true)
+            .maybeSingle();
+          ex=data;
+        }
         if(ex){
           const newQty=ex.cantidad_actual+item.cantidad_solicitada;
           await supabase.from('items').update({cantidad_actual:newQty}).eq('id',ex.id);
@@ -1839,9 +1874,16 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
             'actualizar', ex.cantidad_actual, newQty,
             `Pedido ${pedido.referencia} recibido`
           );
+        } else {
+          skipped++;
         }
       }
+      if(skipped>0)
+        showToast(`⚠️ ${skipped} insumo(s) no encontrados — revisa que existan en esta sede`);
+      else
+        showToast(`✅ Stock actualizado — pedido ${pedido.referencia} recibido`);
     }
+
     loadPedidos();
     setSaving(false);
   };
@@ -1850,6 +1892,11 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:18}}>
+      {toast&&(
+        <div style={{position:'fixed',top:48,right:20,background:T.hi,color:'#fff',
+          padding:'10px 18px',borderRadius:10,fontSize:13,zIndex:300,
+          boxShadow:'0 4px 20px rgba(0,0,0,0.25)'}}>{toast}</div>
+      )}
       <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between'}}>
         <div>
           <h1 style={{fontSize:21,fontWeight:700,color:T.hi,letterSpacing:'-0.025em',margin:0}}>Pedidos</h1>
