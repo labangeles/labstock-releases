@@ -1476,11 +1476,17 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
   const [selected,setSelected]=useState({});
   const [qtys,setQtys]=useState({});
   const [saving,setSaving]=useState(false);
+  const [search,setSearch]=useState('');
 
   const santaLucia=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME);
 
   const sortOrd={out:0,crit:1,warn:2,ok:3};
   const sorted=[...items].sort((a,b)=>sortOrd[getStatus(a)]-sortOrd[getStatus(b)]);
+  const visible=search.trim()
+    ?sorted.filter(i=>i.name.toLowerCase().includes(search.toLowerCase())||
+        (i.code&&i.code.toLowerCase().includes(search.toLowerCase()))||
+        i.category.toLowerCase().includes(search.toLowerCase()))
+    :sorted;
 
   useEffect(()=>{
     const initQ={}, initS={};
@@ -1544,7 +1550,26 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
             No hay insumos en esta sede
           </div>
         ):(
-          <div style={{border:`1px solid ${T.border}`,borderRadius:8,maxHeight:280,overflowY:'auto'}}>
+          <>
+          <div style={{position:'relative',marginBottom:8}}>
+            <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',
+              color:T.lo,pointerEvents:'none'}}><Ico.Search s={13}/></span>
+            <input value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Buscar insumo, código o categoría..."
+              style={{width:'100%',padding:'7px 11px 7px 30px',border:`1px solid ${T.border}`,
+                borderRadius:7,fontFamily:'inherit',fontSize:12.5,color:T.hi,
+                background:'var(--input-bg)',outline:'none',boxSizing:'border-box'}}
+              onFocus={e=>e.target.style.borderColor=T.teal}
+              onBlur={e=>e.target.style.borderColor=T.border}/>
+            {search&&(
+              <button onClick={()=>setSearch('')}
+                style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',
+                  background:'none',border:'none',cursor:'pointer',color:T.lo,fontSize:14,padding:2}}>
+                ×
+              </button>
+            )}
+          </div>
+          <div style={{border:`1px solid ${T.border}`,borderRadius:8,maxHeight:260,overflowY:'auto'}}>
             {/* header */}
             <div style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',padding:'7px 12px',
               background:'var(--table-head-bg)',borderBottom:`1px solid ${T.border}`}}>
@@ -1552,14 +1577,18 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
                 <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
               ))}
             </div>
-            {sorted.map((item,i)=>{
+            {visible.length===0?(
+              <div style={{padding:'24px',textAlign:'center',color:T.lo,fontSize:13}}>
+                Sin resultados para "{search}"
+              </div>
+            ):visible.map((item,i)=>{
               const isSel=!!selected[item.id];
               const st=getStatus(item);
               return (
                 <div key={item.id} onClick={()=>toggle(item.id)}
                   style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',
                     padding:'9px 12px',alignItems:'center',gap:8,cursor:'pointer',
-                    borderBottom:i<sorted.length-1?`1px solid ${T.border}`:'none',
+                    borderBottom:i<visible.length-1?`1px solid ${T.border}`:'none',
                     background:isSel?'#F0FAFA':'transparent',transition:'background 0.1s'}}
                   onMouseEnter={e=>!isSel&&(e.currentTarget.style.background='#F6FAFB')}
                   onMouseLeave={e=>!isSel&&(e.currentTarget.style.background='transparent')}>
@@ -1584,6 +1613,7 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
               );
             })}
           </div>
+          </>
         )}
       </div>
 
