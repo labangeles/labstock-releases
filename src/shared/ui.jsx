@@ -109,7 +109,7 @@ export function Modal({open,onClose,title,children,maxWidth=460}) {
     <div style={{position:'fixed',inset:0,background:'rgba(10,20,28,0.45)',
       display:'flex',alignItems:'center',justifyContent:'center',
       zIndex:200,backdropFilter:'blur(2px)',padding:16,WebkitAppRegion:'no-drag'}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
+>
       <div style={{background:T.surface,borderRadius:14,width:'100%',maxWidth,
         maxHeight:'92vh',overflowY:'auto',WebkitAppRegion:'no-drag',
         boxShadow:'0 20px 60px rgba(0,0,0,0.25)',border:`1px solid ${T.border}`}}>
