@@ -882,10 +882,35 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
         <div style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
           padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
-          {['Código','Insumo','Categoría','Stock','Mín.','Estado',''].map((h,i)=>(
-            <span key={i} style={{fontSize:11,fontWeight:700,color:T.lo,
-              textTransform:'uppercase',letterSpacing:'0.06em'}}>{h}</span>
-          ))}
+          {[
+            {label:'Código',   field:'code'},
+            {label:'Insumo',   field:'name'},
+            {label:'Categoría',field:'category'},
+            {label:'Stock',    field:'current'},
+            {label:'Mín.',     field:'minimum'},
+            {label:'Estado',   field:'status'},
+            {label:'',         field:null},
+          ].map(({label,field},i)=>{
+            if(!field) return <span key={i}/>;
+            const active=filter.sortField===field;
+            return (
+              <button key={i}
+                onClick={()=>setFilter(f=>({
+                  ...f,sortField:field,
+                  sortDir:f.sortField===field&&f.sortDir==='asc'?'desc':'asc'
+                }))}
+                style={{background:'none',border:'none',padding:0,cursor:'pointer',
+                  display:'flex',alignItems:'center',gap:4,textAlign:'left',
+                  fontFamily:'inherit',fontSize:11,fontWeight:700,
+                  color:active?T.teal:T.lo,
+                  textTransform:'uppercase',letterSpacing:'0.06em'}}>
+                {label}
+                <span style={{fontSize:9,opacity:active?1:0.25,color:active?T.teal:T.lo}}>
+                  {active&&filter.sortDir==='desc'?'▼':'▲'}
+                </span>
+              </button>
+            );
+          })}
         </div>
         {filtered.length===0?(
           <div style={{padding:'52px 20px',textAlign:'center'}}>
@@ -2033,7 +2058,7 @@ export default function App() {
   const [view,setView]             = useState("inicio");
   const [modal,setModal]           = useState(null);
   const [sel,setSel]               = useState(null);
-  const [filter,setFilter]         = useState({search:"",status:"Todos"});
+  const [filter,setFilter]         = useState({search:"",status:"Todos",sortField:'name',sortDir:'asc'});
   const [dbLoading,setDbL]         = useState(false);
   const [selectedSede,setSede]     = useState(null);
   const [pedidosBadge,setPedBadge] = useState(0);
@@ -2155,15 +2180,28 @@ export default function App() {
     }
   },[alertCount,profile]);
 
-  /* ── Filtered items ──────────────────────────────────── */
-  const filtered=useMemo(()=>items.filter(i=>{
-    const q=filter.search.toLowerCase();
-    if(q&&!i.name.toLowerCase().includes(q)&&!i.category.toLowerCase().includes(q)) return false;
-    if(filter.status==='Todos') return true;
-    const st=getStatus(i);
-    if(filter.status==='crit') return st==='crit'||st==='out';
-    return st===filter.status;
-  }),[items,filter]);
+  /* ── Filtered + sorted items ─────────────────────────── */
+  const filtered=useMemo(()=>{
+    let arr=items.filter(i=>{
+      const q=filter.search.toLowerCase();
+      if(q&&!i.name.toLowerCase().includes(q)&&!i.category.toLowerCase().includes(q)) return false;
+      if(filter.status==='Todos') return true;
+      const st=getStatus(i);
+      if(filter.status==='crit') return st==='crit'||st==='out';
+      return st===filter.status;
+    });
+    if(filter.sortField){
+      const dir=filter.sortDir==='asc'?1:-1;
+      const stOrd={ok:0,warn:1,crit:2,out:3};
+      arr=[...arr].sort((a,b)=>{
+        if(filter.sortField==='status') return (stOrd[getStatus(b)]-stOrd[getStatus(a)])*dir;
+        if(filter.sortField==='current'||filter.sortField==='minimum')
+          return ((a[filter.sortField]||0)-(b[filter.sortField]||0))*dir;
+        return ((a[filter.sortField]||'').localeCompare(b[filter.sortField]||'','es'))*dir;
+      });
+    }
+    return arr;
+  },[items,filter]);
 
   const close=()=>{setModal(null);setSel(null);};
 
