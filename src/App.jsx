@@ -108,22 +108,35 @@ function itemsToCSV(items) {
 }
 
 function parseCSV(text) {
-  // Limpiar BOM y línea sep= si vienen de Excel
-  const clean = text.replace(/^﻿/, '').replace(/^sep=.*\n/i, '');
+  // Limpiar BOM y línea sep= (Excel en español exporta sep=;)
+  const clean = text.replace(/^﻿/, '').replace(/^sep=.*\r?\n/i, '');
   const lines = clean.trim().split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) throw new Error('El archivo está vacío.');
-  const header = lines[0].toLowerCase();
-  if (!header.includes('nombre') || !header.includes('categoria'))
-    throw new Error('Encabezado CSV incorrecto. Usa la plantilla descargada.');
+
+  // Auto-detectar separador: ; o ,
+  const sep = lines[0].includes(';') ? ';' : ',';
+  const headerCols = lines[0].split(sep).map(h => h.replace(/^"|"$/g,'').trim().toLowerCase());
+
+  if (!headerCols.includes('nombre') || !headerCols.includes('categoria'))
+    throw new Error('Encabezado CSV incorrecto. Columnas requeridas: nombre, categoria.');
+
+  // Mapeo por nombre de columna (insensible al orden)
+  const idx = {};
+  headerCols.forEach((h, i) => { idx[h] = i; });
+  const col = (row, name) => idx[name] !== undefined ? row[idx[name]] : '';
+
   return lines.slice(1).map(line => {
-    const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').trim());
-    const [nombre, categoria, unidad, ca, cm, cx] = cols;
+    const cols = line.split(sep).map(c => c.replace(/^"|"$/g,'').trim());
+    const nombre = col(cols, 'nombre');
     if (!nombre) return null;
     return {
-      name: nombre, category: categoria || CATEGORIES[0], unit: unidad || UNITS[0],
-      current: Math.max(0, parseInt(ca)||0),
-      minimum: Math.max(1, parseInt(cm)||5),
-      maximum: Math.max(1, parseInt(cx)||20),
+      code:    col(cols, 'codigo') || null,
+      name:    nombre,
+      category: col(cols, 'categoria') || CATEGORIES[0],
+      unit:    col(cols, 'unidad')    || UNITS[0],
+      current: Math.max(0, parseInt(col(cols, 'cantidad_actual'))||0),
+      minimum: Math.max(1, parseInt(col(cols, 'cantidad_minima'))||5),
+      maximum: Math.max(1, parseInt(col(cols, 'cantidad_maxima'))||20),
     };
   }).filter(Boolean);
 }
