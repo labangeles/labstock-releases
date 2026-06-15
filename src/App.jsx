@@ -52,7 +52,7 @@ const CAT_PREFIX = {
 const fromDB = r => ({
   id: r.id, code: r.codigo||'', name: r.nombre, category: r.categoria, unit: r.unidad,
   current: r.cantidad_actual, minimum: r.cantidad_minima, maximum: r.cantidad_maxima,
-  lastUpdated: r.updated_at, sede_id: r.sede_id,
+  lastUpdated: r.updated_at, sede_id: r.sede_id, enUso: r.en_uso||false,
 });
 const toDB = (item, sedeId, userId) => ({
   codigo: item.code||null, nombre: item.name.trim(), categoria: item.category, unidad: item.unit,
@@ -830,7 +830,7 @@ function ResumenBodegaScreen({items,onGoAlerts,onReport,sedeName,isAdmin,sedes,i
 /* ═══════════════════════════════════════════════════════════
    PANTALLA: INVENTARIO
 ═══════════════════════════════════════════════════════════ */
-function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate,onDelete,onImport,onExport,canEdit}) {
+function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate,onDelete,onImport,onExport,onToggleEnUso,canEdit}) {
   const chips=[
     {id:'Todos',label:'Todos',n:items.length},
     {id:'ok',label:'OK',n:items.filter(i=>getStatus(i)==='ok').length},
@@ -880,7 +880,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
       </div>
 
       <div style={{background:T.surface,borderRadius:12,border:`1px solid ${T.border}`,overflow:'hidden'}}>
-        <div style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
+        <div style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 108px',
           padding:'8px 18px',borderBottom:`1px solid ${T.border}`,background:'var(--table-head-bg)'}}>
           {[
             {label:'Código',   field:'code'},
@@ -922,7 +922,7 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
           const low=item.current<=item.minimum;
           return (
             <div key={item.id}
-              style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 84px',
+              style={{display:'grid',gridTemplateColumns:'90px 2fr 1.1fr 0.7fr 0.55fr 1fr 108px',
                 padding:'12px 18px',alignItems:'center',
                 borderBottom:i<filtered.length-1?`1px solid ${T.border}`:'none',transition:'background 0.1s'}}
               onMouseEnter={e=>e.currentTarget.style.background='var(--row-hover)'}
@@ -932,7 +932,14 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
                 {item.code||'—'}
               </span>
               <div>
-                <div style={{fontSize:13,fontWeight:500,color:T.hi}}>{item.name}</div>
+                <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                  <span style={{fontSize:13,fontWeight:500,color:T.hi}}>{item.name}</span>
+                  {item.enUso&&(
+                    <span style={{fontSize:9.5,fontWeight:700,padding:'2px 7px',borderRadius:4,
+                      background:'#FFF0D0',color:'#92400E',letterSpacing:'0.05em',
+                      textTransform:'uppercase',whiteSpace:'nowrap'}}>en uso</span>
+                  )}
+                </div>
                 {item.lastUpdated&&(
                   <div style={{fontSize:10.5,color:T.lo,marginTop:1}}>{fmt(item.lastUpdated)}</div>
                 )}
@@ -944,6 +951,10 @@ function InventarioScreen({items,filter,setFilter,filtered,onAdd,onEdit,onUpdate
               <span style={{fontSize:12.5,color:T.mid}}>{item.minimum}</span>
               <StatusBadge status={st}/>
               <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
+                {canEdit&&<IconBtn icon={<Ico.Beaker s={13}/>}
+                  title={item.enUso?'Quitar "en uso"':'Marcar como en uso'}
+                  onClick={()=>onToggleEnUso(item)}
+                  style={item.enUso?{color:'#92400E',background:'#FFF0D0'}:{}}/>}
                 {canEdit&&<IconBtn icon={<Ico.Sliders s={13}/>} onClick={()=>onUpdate(item)}/>}
                 {canEdit&&<IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>onEdit(item)}/>}
                 {canEdit&&<IconBtn icon={<Ico.Trash s={13}/>} danger onClick={()=>onDelete(item)}/>}
@@ -2319,6 +2330,14 @@ export default function App() {
     loadItems(); close();
   };
 
+  const handleToggleEnUso=async(item)=>{
+    const nuevoValor=!item.enUso;
+    await supabase.from('items').update({en_uso:nuevoValor}).eq('id',item.id);
+    await logAct(currentSedeId,currentSedeName,item.id,item.name,profile.id,profile.nombre,
+      'editar',undefined,undefined,nuevoValor?'Marcado como en uso':'Marcado como reserva disponible');
+    loadItems();
+  };
+
   const handleImport=async(rows)=>{
     if(!currentSedeId){alert('Selecciona una sede antes de importar.');return;}
     const inserts=rows.map(r=>({...toDB(r,currentSedeId,profile.id)}));
@@ -2409,6 +2428,7 @@ export default function App() {
               onEdit={i=>{setSel(i);setModal("edit");}}
               onUpdate={i=>{setSel(i);setModal("update");}}
               onDelete={i=>{setSel(i);setModal("delete");}}
+              onToggleEnUso={handleToggleEnUso}
               onImport={()=>setModal("import")}
               onExport={handleExport}/>
           )}
