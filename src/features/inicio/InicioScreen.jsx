@@ -4,6 +4,7 @@ import { T, Ico, fmtQ } from '../../shared/ui';
 import { urlFirmada } from '../rrhh/lib/storage';
 import { AlertasRRHH }       from './components/AlertasRRHH';
 import { PromocionesSection } from './components/PromocionesSection';
+import { MarcajeWidget }     from './components/MarcajeWidget';
 
 /* ── Frases inspiradoras (rotan por día del año) ─────────── */
 const FRASES = [
@@ -276,6 +277,9 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
           )}
         </div>
       </div>
+
+      {/* ── Widget de marcaje de asistencia ── */}
+      <MarcajeWidget profile={profile} />
 
       {/* ── Promociones del mes ── */}
       <PromocionesSection profile={profile} isAdmin={isAdmin} />

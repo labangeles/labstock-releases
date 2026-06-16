@@ -11,6 +11,7 @@ import MiExpedienteTab from './autoservicio/MiExpedienteTab';
 import EmpleadosTab from './gestion/EmpleadosTab';
 import AprobacionesTab from './gestion/AprobacionesTab';
 import DisciplinaTab from './gestion/DisciplinaTab';
+import AsistenciaTab from './gestion/AsistenciaTab';
 
 const Pendiente = ({ label }) => (
   <div style={{ color: T.lo, padding: 24, fontSize: 14 }}>
@@ -27,7 +28,7 @@ const AUTOSERVICIO = [
 
 const GESTION = [
   { id: 'empleados',        label: 'Empleados',    Comp: EmpleadosTab,                             roles: ['admin','auditor'] },
-  { id: 'asistencia',       label: 'Asistencia',   Comp: () => <Pendiente label="Asistencia" />,   roles: ['admin','auditor'] },
+  { id: 'asistencia',       label: 'Asistencia',   Comp: AsistenciaTab,                            roles: ['admin','auditor'] },
   { id: 'nomina',           label: 'Nómina',       Comp: () => <Pendiente label="Nómina" />,       roles: ['admin','auditor'] },
   { id: 'prestaciones',     label: 'Prestaciones', Comp: () => <Pendiente label="Prestaciones" />, roles: ['admin','auditor'] },
   { id: 'vacaciones_admin', label: 'Aprobaciones', Comp: AprobacionesTab,                          roles: ['admin','auditor'] },
