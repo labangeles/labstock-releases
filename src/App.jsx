@@ -12,7 +12,8 @@ import { ComprasScreen } from "./features/compras/ComprasScreen";
 import { GastosFijosScreen } from "./features/admin/GastosFijosScreen";
 import { AnalisisFinancieroScreen } from "./features/admin/AnalisisFinancieroScreen";
 import { InicioScreen } from "./features/inicio/InicioScreen";
-import { RRHHScreen } from "./features/rrhh/RRHHScreen";
+import { RRHHScreen }   from "./features/rrhh/RRHHScreen";
+import { VentasScreen } from "./features/ventas/VentasScreen";
 
 /* ── DATOS ───────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -269,9 +270,11 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
   const isAuditor    = profile?.rol==='auditor';
   const isTecnico    = profile?.rol==='tecnico';
   const isSecretaria = profile?.rol==='secretaria';
-  const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
-  const bodegaPerm   = isAdmin || (isTecnico && profile?.permisos?.bodega!==false);
-  const compraPerm   = isAdmin || isAuditor || isSecretaria;
+  const cajaPerm        = isAdmin || isAuditor || profile?.permisos?.caja===true;
+  const bodegaPerm      = isAdmin || (isTecnico && profile?.permisos?.bodega!==false);
+  const compraPerm      = isAdmin || isAuditor || isSecretaria;
+  const ventasIgssPerm  = isAdmin || profile?.permisos?.ventas_igss===true;
+  const ventasEmpPerm   = isAdmin || profile?.permisos?.ventas_empresas===true;
 
   const navBodega = bodegaPerm && !isAuditor ? [
     {id:'resumen',    label:'Resumen',    Icon:Ico.Layers},
@@ -294,6 +297,11 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
     {id:'rrhh', label:'Recursos Humanos', Icon:Ico.Users},
     ...(isAdmin ? [{id:'usuarios', label:'Usuarios', Icon:Ico.Lock}] : []),
   ];
+
+  const navVentas = (ventasIgssPerm || ventasEmpPerm) ? [
+    ...(ventasIgssPerm ? [{id:'ventas_igss',      label:'IGSS Gomera', Icon:Ico.Receipt}]  : []),
+    ...(ventasEmpPerm  ? [{id:'ventas_empresas',  label:'Empresas',    Icon:Ico.Layers}]   : []),
+  ] : [];
 
   const navCaja = cajaPerm ? [
     ...(!isAuditor ? [{id:'caja_dia', label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
@@ -367,6 +375,15 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
             <SectionLabel label="Finanzas"/>
             {navFinanzas.map(({id,label,Icon,badge})=>(
               <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
+                active={view===id} onNav={onNav}/>
+            ))}
+          </>
+        )}
+        {navVentas.length>0 && (
+          <>
+            <SectionLabel label="Ventas"/>
+            {navVentas.map(({id,label,Icon})=>(
+              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={0}
                 active={view===id} onNav={onNav}/>
             ))}
           </>
@@ -1177,8 +1194,8 @@ function UsuariosScreen({sedes}) {
   const [modal,setModal]     = useState(false);
   const [editModal,setEditModal] = useState(null); // user object or null
   const [toast,setToast]     = useState('');
-  const [form,setForm]       = useState({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
-  const [editForm,setEditForm] = useState({nombre:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false,newPassword:''});
+  const [form,setForm]       = useState({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false,permVentasIgss:false,permVentasEmp:false});
+  const [editForm,setEditForm] = useState({nombre:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false,permVentasIgss:false,permVentasEmp:false,newPassword:''});
   const [saving,setSaving]   = useState(false);
   const [err,setErr]         = useState('');
   const [editErr,setEditErr] = useState('');
@@ -1194,12 +1211,14 @@ function UsuariosScreen({sedes}) {
   const openEdit=(u)=>{
     setEditErr('');
     setEditForm({
-      nombre:    u.nombre||'',
-      rol:       u.rol||'tecnico',
-      sedeId:    u.sede_id||'',
-      permBodega: u.permisos?.bodega!==false,
-      permCaja:   u.permisos?.caja===true,
-      newPassword:'',
+      nombre:       u.nombre||'',
+      rol:          u.rol||'tecnico',
+      sedeId:       u.sede_id||'',
+      permBodega:   u.permisos?.bodega!==false,
+      permCaja:     u.permisos?.caja===true,
+      permVentasIgss: u.permisos?.ventas_igss===true,
+      permVentasEmp:  u.permisos?.ventas_empresas===true,
+      newPassword:  '',
     });
     setEditModal(u);
   };
@@ -1217,9 +1236,11 @@ function UsuariosScreen({sedes}) {
     setSaving(true);
     const emailInterno=form.codigo.trim().toLowerCase()+'@labstock.gt';
     const permisos=form.rol==='tecnico'
-      ?{bodega:form.permBodega,caja:form.permCaja}
+      ?{bodega:form.permBodega,caja:form.permCaja,ventas_igss:form.permVentasIgss,ventas_empresas:form.permVentasEmp}
       :form.rol==='secretaria'
-      ?{caja:form.permCaja}
+      ?{caja:form.permCaja,ventas_igss:form.permVentasIgss,ventas_empresas:form.permVentasEmp}
+      :form.rol==='auditor'
+      ?{ventas_igss:form.permVentasIgss,ventas_empresas:form.permVentasEmp}
       :null;
     const r=await window.electronAPI?.createUser({
       email:emailInterno, password:form.password, nombre:form.nombre,
@@ -1230,7 +1251,7 @@ function UsuariosScreen({sedes}) {
     setSaving(false);
     if(r?.error){setErr(r.error);return;}
     setModal(false);
-    setForm({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
+    setForm({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false,permVentasIgss:false,permVentasEmp:false});
     load();
     showToast('✅ Usuario creado correctamente');
   };
@@ -1246,9 +1267,11 @@ function UsuariosScreen({sedes}) {
       if(rp?.error){setEditErr('Error al cambiar contraseña: '+rp.error);setSaving(false);return;}
     }
     const permisos=editForm.rol==='tecnico'
-      ?{bodega:editForm.permBodega,caja:editForm.permCaja}
+      ?{bodega:editForm.permBodega,caja:editForm.permCaja,ventas_igss:editForm.permVentasIgss,ventas_empresas:editForm.permVentasEmp}
       :editForm.rol==='secretaria'
-      ?{caja:editForm.permCaja}
+      ?{caja:editForm.permCaja,ventas_igss:editForm.permVentasIgss,ventas_empresas:editForm.permVentasEmp}
+      :editForm.rol==='auditor'
+      ?{ventas_igss:editForm.permVentasIgss,ventas_empresas:editForm.permVentasEmp}
       :null;
     const r=await window.electronAPI?.updateUser({
       userId:  editModal.id,
@@ -1439,6 +1462,19 @@ function UsuariosScreen({sedes}) {
             </div>
           </Field>
         )}
+        {form.rol!=='admin'&&(
+          <Field label="Módulo Ventas">
+            <div style={{display:'flex',gap:20,padding:'8px 0',flexWrap:'wrap'}}>
+              {[{key:'permVentasIgss',label:'IGSS Gomera'},{key:'permVentasEmp',label:'Empresas'}].map(({key,label})=>(
+                <label key={key} style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                  <input type="checkbox" checked={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.checked}))}
+                    style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                  {label}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
         <RolInfo rol={form.rol}/>
         {err&&<div style={{background:T.critBg,borderRadius:8,padding:'10px 12px',fontSize:12.5,color:T.crit,marginBottom:12}}>{err}</div>}
         <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
@@ -1511,6 +1547,19 @@ function UsuariosScreen({sedes}) {
                       style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
                     Acceso a Caja
                   </label>
+                </div>
+              </Field>
+            )}
+            {editForm.rol!=='admin'&&(
+              <Field label="Módulo Ventas">
+                <div style={{display:'flex',gap:20,padding:'8px 0',flexWrap:'wrap'}}>
+                  {[{key:'permVentasIgss',label:'IGSS Gomera'},{key:'permVentasEmp',label:'Empresas'}].map(({key,label})=>(
+                    <label key={key} style={{display:'flex',alignItems:'center',gap:7,fontSize:13,color:T.hi,cursor:'pointer'}}>
+                      <input type="checkbox" checked={editForm[key]} onChange={e=>setEditForm(f=>({...f,[key]:e.target.checked}))}
+                        style={{width:15,height:15,accentColor:T.teal,cursor:'pointer'}}/>
+                      {label}
+                    </label>
+                  ))}
                 </div>
               </Field>
             )}
@@ -2551,6 +2600,9 @@ export default function App() {
           )}
           {view==="rrhh"&&(
             <RRHHScreen/>
+          )}
+          {(view==="ventas_igss"||view==="ventas_empresas")&&(ventasIgssPerm||ventasEmpPerm)&&(
+            <VentasScreen view={view}/>
           )}
         </main>
       </div>
