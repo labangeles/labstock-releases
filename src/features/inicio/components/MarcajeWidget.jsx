@@ -6,19 +6,23 @@ import { T } from '../../../shared/ui';
 const HORARIO_DEF = {
   hora_entrada: '07:00',
   hora_salida: '17:00',
+  duracion_desayuno_min: 15,
   duracion_comida_min: 60,
   tolerancia_min: 2,
+  tiene_desayuno: false,
   dias_laborales: [1, 2, 3, 4, 5],
 };
 
 const TIPOS_CONFIG = {
-  entrada:       { label: 'Marcar entrada',           emoji: '🟢', color: '#22C55E' },
-  inicio_comida: { label: 'Salir a almorzar',          emoji: '🍽️',  color: '#F59E0B' },
-  fin_comida:    { label: 'Regresar del almuerzo',     emoji: '↩️',  color: '#3B82F6' },
-  salida:        { label: 'Marcar salida',             emoji: '🔴', color: '#EF4444' },
+  entrada:          { label: 'Marcar entrada',           emoji: '🟢', color: '#22C55E' },
+  inicio_desayuno:  { label: 'Salir a desayunar',        emoji: '☕', color: '#8B5CF6' },
+  fin_desayuno:     { label: 'Regresar del desayuno',    emoji: '↩️', color: '#7C3AED' },
+  inicio_comida:    { label: 'Salir a almorzar',         emoji: '🍽️', color: '#F59E0B' },
+  fin_comida:       { label: 'Regresar del almuerzo',    emoji: '↩️', color: '#3B82F6' },
+  salida:           { label: 'Marcar salida',            emoji: '🔴', color: '#EF4444' },
 };
 
-/* JS getDay() → 0=Dom..6=Sáb  →  DB 1=Lun..7=Dom */
+/* JS getDay() 0=Dom..6=Sáb  →  DB 1=Lun..7=Dom */
 function jsDiaAdb(d) { return d === 0 ? 7 : d; }
 
 function hhmm(dateStr) {
@@ -26,17 +30,26 @@ function hhmm(dateStr) {
   return new Date(dateStr).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
 }
 
-function getNextTipo(marcajes) {
+function getSecuencia(horario) {
+  const seq = ['entrada'];
+  if (horario?.tiene_desayuno) {
+    seq.push('inicio_desayuno', 'fin_desayuno');
+  }
+  seq.push('inicio_comida', 'fin_comida', 'salida');
+  return seq;
+}
+
+function getNextTipo(marcajes, horario) {
   const tipos = new Set(marcajes.map(m => m.tipo));
-  if (!tipos.has('entrada'))       return 'entrada';
-  if (!tipos.has('inicio_comida')) return 'inicio_comida';
-  if (!tipos.has('fin_comida'))    return 'fin_comida';
-  if (!tipos.has('salida'))        return 'salida';
+  for (const t of getSecuencia(horario)) {
+    if (!tipos.has(t)) return t;
+  }
   return null;
 }
 
 function calcTardanza(tipo, horario, marcajesHoy) {
   const now = new Date();
+
   if (tipo === 'entrada') {
     const [h, m] = horario.hora_entrada.split(':').map(Number);
     const prog = new Date(); prog.setHours(h, m, 0, 0);
@@ -44,6 +57,17 @@ function calcTardanza(tipo, horario, marcajesHoy) {
     const min = Math.max(0, diffMin - horario.tolerancia_min);
     return { hora_programada: horario.hora_entrada, minutos_tardanza: Math.round(min), es_tardanza: min > 0 };
   }
+
+  if (tipo === 'fin_desayuno') {
+    const ini = marcajesHoy.find(m => m.tipo === 'inicio_desayuno');
+    if (ini) {
+      const diffMin = (now - new Date(ini.marcado_en)) / 60000;
+      const limite = horario.duracion_desayuno_min + horario.tolerancia_min;
+      const min = Math.max(0, diffMin - limite);
+      return { hora_programada: null, minutos_tardanza: Math.round(min), es_tardanza: min > 0 };
+    }
+  }
+
   if (tipo === 'fin_comida') {
     const ini = marcajesHoy.find(m => m.tipo === 'inicio_comida');
     if (ini) {
@@ -53,10 +77,10 @@ function calcTardanza(tipo, horario, marcajesHoy) {
       return { hora_programada: null, minutos_tardanza: Math.round(min), es_tardanza: min > 0 };
     }
   }
+
   return { hora_programada: null, minutos_tardanza: 0, es_tardanza: false };
 }
 
-/* devuelve si ahorita ya deberían haber marcado y no lo hicieron */
 function calcAlertaActual(nextTipo, horario, marcajesHoy) {
   if (!nextTipo) return null;
   const now = new Date();
@@ -64,46 +88,52 @@ function calcAlertaActual(nextTipo, horario, marcajesHoy) {
   if (nextTipo === 'entrada') {
     const [h, m] = horario.hora_entrada.split(':').map(Number);
     const prog = new Date(); prog.setHours(h, m, 0, 0);
-    const minRetraso = (now - prog) / 60000 - horario.tolerancia_min;
-    if (minRetraso > 0) return `¡Llevas ${Math.round(minRetraso)} min de retraso en la entrada!`;
+    const min = (now - prog) / 60000 - horario.tolerancia_min;
+    if (min > 0) return `¡Llevas ${Math.round(min)} min de retraso en la entrada!`;
+  }
+
+  if (nextTipo === 'fin_desayuno') {
+    const ini = marcajesHoy.find(m => m.tipo === 'inicio_desayuno');
+    if (ini) {
+      const excedido = (now - new Date(ini.marcado_en)) / 60000 - horario.duracion_desayuno_min - horario.tolerancia_min;
+      if (excedido > 0) return `¡Excediste el desayuno por ${Math.round(excedido)} min!`;
+    }
   }
 
   if (nextTipo === 'fin_comida') {
     const ini = marcajesHoy.find(m => m.tipo === 'inicio_comida');
     if (ini) {
-      const minTranscurridos = (now - new Date(ini.marcado_en)) / 60000;
-      const minExcedido = minTranscurridos - horario.duracion_comida_min - horario.tolerancia_min;
-      if (minExcedido > 0) return `¡Excediste el almuerzo por ${Math.round(minExcedido)} min!`;
+      const excedido = (now - new Date(ini.marcado_en)) / 60000 - horario.duracion_comida_min - horario.tolerancia_min;
+      if (excedido > 0) return `¡Excediste el almuerzo por ${Math.round(excedido)} min!`;
     }
   }
 
   return null;
 }
 
-/* ─── MarcajeWidget ────────────────────────────────────────── */
+/* ─── MarcajeWidget ───────────────────────────────────────── */
 export function MarcajeWidget({ profile }) {
-  const [empleado,   setEmpleado]   = useState(null);
-  const [horario,    setHorario]    = useState(null);
-  const [marcajes,   setMarcajes]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [marcando,   setMarcando]   = useState(false);
-  const [msg,        setMsg]        = useState(null); // { tipo:'ok'|'err', texto }
-  const [ahora,      setAhora]      = useState(new Date());
+  const [empleado, setEmpleado] = useState(null);
+  const [horario,  setHorario]  = useState(null);
+  const [marcajes, setMarcajes] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [marcando, setMarcando] = useState(false);
+  const [msg,      setMsg]      = useState(null);
+  const [ahora,    setAhora]    = useState(new Date());
   const timerRef = useRef(null);
 
-  /* reloj cada segundo */
   useEffect(() => {
     timerRef.current = setInterval(() => setAhora(new Date()), 1000);
     return () => clearInterval(timerRef.current);
   }, []);
 
-  /* cargar datos iniciales */
   const cargar = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
     try {
       const { data: emp } = await supabase
-        .from('empleados').select('id, organizacion_id, sede_id').eq('profile_id', profile.id).maybeSingle();
+        .from('empleados').select('id, organizacion_id, sede_id')
+        .eq('profile_id', profile.id).maybeSingle();
       if (!emp) { setEmpleado(null); setLoading(false); return; }
       setEmpleado(emp);
 
@@ -121,21 +151,18 @@ export function MarcajeWidget({ profile }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  /* no tiene registro de empleado */
   if (!loading && !empleado) return null;
 
   const hoy = new Date();
-  const diaSemanaDb = jsDiaAdb(hoy.getDay());
   const hor = horario || HORARIO_DEF;
-  const esDiaLaboral = hor.dias_laborales.includes(diaSemanaDb);
-
-  const nextTipo = getNextTipo(marcajes);
+  const esDiaLaboral = hor.dias_laborales.includes(jsDiaAdb(hoy.getDay()));
+  const nextTipo = getNextTipo(marcajes, hor);
   const alerta   = esDiaLaboral ? calcAlertaActual(nextTipo, hor, marcajes) : null;
+  const hayTardanza = alerta != null;
 
   const marcar = async () => {
     if (!nextTipo || !empleado || marcando) return;
-    setMarcando(true);
-    setMsg(null);
+    setMarcando(true); setMsg(null);
     try {
       const tard = calcTardanza(nextTipo, hor, marcajes);
       const { error } = await supabase.from('asistencia_marcajes').insert({
@@ -149,7 +176,7 @@ export function MarcajeWidget({ profile }) {
       setMsg({ tipo: 'ok', texto: '¡Marcaje registrado!' });
       await cargar();
     } catch (e) {
-      setMsg({ tipo: 'err', texto: e.message?.includes('unique') ? 'Ya registraste este marcaje hoy.' : 'Error al registrar. Intenta de nuevo.' });
+      setMsg({ tipo: 'err', texto: e.message?.includes('unique') ? 'Ya registraste este marcaje hoy.' : 'Error al registrar.' });
     } finally {
       setMarcando(false);
       setTimeout(() => setMsg(null), 3500);
@@ -158,20 +185,20 @@ export function MarcajeWidget({ profile }) {
 
   const horaStr = ahora.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const cfg = nextTipo ? TIPOS_CONFIG[nextTipo] : null;
-  const hayTardanza = alerta != null;
+  const secuencia = getSecuencia(hor);
 
-  if (loading) return null; // no mostrar skeleton, aparece rápido
+  if (loading) return null;
 
   return (
     <div style={{
       background: T.surface,
       border: `1px solid ${hayTardanza ? '#EF444466' : T.border}`,
       borderLeft: `4px solid ${hayTardanza ? '#EF4444' : cfg?.color || T.ok}`,
-      borderRadius: 14,
-      padding: '18px 22px',
+      borderRadius: 14, padding: '18px 22px',
       boxShadow: hayTardanza ? '0 4px 16px #EF444422' : '0 1px 4px rgba(0,0,0,0.05)',
     }}>
-      {/* Fila superior */}
+
+      {/* Encabezado */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>⏰</span>
@@ -181,8 +208,9 @@ export function MarcajeWidget({ profile }) {
               borderRadius: 6, padding: '2px 8px', color: T.lo }}>Día no laborable</span>
           )}
         </div>
-        <span style={{ fontSize: 15, fontWeight: 700, color: hayTardanza ? '#EF4444' : T.mid,
-          fontVariantNumeric: 'tabular-nums', letterSpacing: '0.01em' }}>
+        <span style={{ fontSize: 15, fontWeight: 700,
+          color: hayTardanza ? '#EF4444' : T.mid,
+          fontVariantNumeric: 'tabular-nums' }}>
           {horaStr}
         </span>
       </div>
@@ -196,47 +224,45 @@ export function MarcajeWidget({ profile }) {
         </div>
       )}
 
-      {/* Resumen del día */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        {Object.entries(TIPOS_CONFIG).map(([tipo, cfg]) => {
+      {/* Pastillas de progreso del día */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {secuencia.map(tipo => {
           const marc = marcajes.find(m => m.tipo === tipo);
+          const c = TIPOS_CONFIG[tipo];
           return (
             <div key={tipo} style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              background: marc ? `${cfg.color}18` : T.canvas,
-              border: `1px solid ${marc ? cfg.color + '44' : T.border}`,
+              background: marc ? `${c.color}18` : T.canvas,
+              border: `1px solid ${marc ? c.color + '44' : T.border}`,
               borderRadius: 8, padding: '4px 10px',
             }}>
-              <span style={{ fontSize: 12 }}>{cfg.emoji}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600,
-                color: marc ? cfg.color : T.lo }}>
+              <span style={{ fontSize: 11 }}>{c.emoji}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: marc ? c.color : T.lo }}>
                 {marc ? hhmm(marc.marcado_en) : '—'}
-                {marc?.es_tardanza && <span style={{ marginLeft: 4, color: '#EF4444', fontSize: 10.5 }}>
-                  +{marc.minutos_tardanza}m tarde
-                </span>}
+                {marc?.es_tardanza && (
+                  <span style={{ marginLeft: 4, color: '#EF4444', fontSize: 10.5 }}>
+                    +{marc.minutos_tardanza}m
+                  </span>
+                )}
               </span>
             </div>
           );
         })}
       </div>
 
-      {/* Acción principal */}
+      {/* Botón de acción */}
       {esDiaLaboral && (
         nextTipo ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              onClick={marcar}
-              disabled={marcando}
-              style={{
-                background: hayTardanza ? '#EF4444' : cfg.color,
-                color: '#fff', border: 'none', borderRadius: 9,
-                padding: '10px 20px', fontSize: 13.5, fontWeight: 700,
-                cursor: marcando ? 'not-allowed' : 'pointer',
-                opacity: marcando ? 0.7 : 1,
-                fontFamily: 'inherit',
-                transition: 'opacity 0.15s',
-                display: 'flex', alignItems: 'center', gap: 7,
-              }}>
+            <button onClick={marcar} disabled={marcando} style={{
+              background: hayTardanza ? '#EF4444' : cfg.color,
+              color: '#fff', border: 'none', borderRadius: 9,
+              padding: '10px 20px', fontSize: 13.5, fontWeight: 700,
+              cursor: marcando ? 'not-allowed' : 'pointer',
+              opacity: marcando ? 0.7 : 1, fontFamily: 'inherit',
+              transition: 'opacity 0.15s',
+              display: 'flex', alignItems: 'center', gap: 7,
+            }}>
               <span>{cfg.emoji}</span>
               {marcando ? 'Registrando…' : cfg.label}
             </button>

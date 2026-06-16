@@ -7,6 +7,8 @@ import { useAuth } from '../../../contexts/AuthContext';
 const HORARIO_DEF = {
   hora_entrada: '07:00',
   hora_salida: '17:00',
+  tiene_desayuno: false,
+  duracion_desayuno_min: 15,
   duracion_comida_min: 60,
   tolerancia_min: 2,
   dias_laborales: [1, 2, 3, 4, 5],
@@ -14,13 +16,21 @@ const HORARIO_DEF = {
 
 const DIAS_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-const TIPOS_ORDEN = ['entrada', 'inicio_comida', 'fin_comida', 'salida'];
 const TIPOS_LABELS = {
-  entrada:       'Entrada',
-  inicio_comida: 'Sale almuerzo',
-  fin_comida:    'Regresa',
-  salida:        'Salida',
+  entrada:          'Entrada',
+  inicio_desayuno:  'Sale desayuno',
+  fin_desayuno:     'Regresa desayuno',
+  inicio_comida:    'Sale almuerzo',
+  fin_comida:       'Regresa almuerzo',
+  salida:           'Salida',
 };
+
+function getSecuencia(horario) {
+  const seq = ['entrada'];
+  if (horario?.tiene_desayuno) seq.push('inicio_desayuno', 'fin_desayuno');
+  seq.push('inicio_comida', 'fin_comida', 'salida');
+  return seq;
+}
 
 function hhmm(val) {
   if (!val) return '—';
@@ -31,12 +41,11 @@ function fechaHoy() {
   return new Date().toISOString().split('T')[0];
 }
 
-function calcEstado(marcajes) {
-  const tipos = new Set(marcajes.map(m => m.tipo));
-  if (tipos.size === 0) return 'ausente';
-  if (tipos.size === 4) {
-    if (marcajes.some(m => m.es_tardanza)) return 'tardanza';
-    return 'completo';
+function calcEstado(marcajes, horario) {
+  if (marcajes.length === 0) return 'ausente';
+  const esperados = getSecuencia(horario).length;
+  if (marcajes.length >= esperados) {
+    return marcajes.some(m => m.es_tardanza) ? 'tardanza' : 'completo';
   }
   return 'incompleto';
 }
@@ -51,11 +60,13 @@ const ESTADO_STYLE = {
 /* ─── HorarioForm inline ──────────────────────────────────── */
 function HorarioForm({ empleado, horarioActual, onGuardado, onCancelar }) {
   const [form, setForm] = useState({
-    hora_entrada: horarioActual?.hora_entrada || HORARIO_DEF.hora_entrada,
-    hora_salida:  horarioActual?.hora_salida  || HORARIO_DEF.hora_salida,
-    duracion_comida_min: horarioActual?.duracion_comida_min ?? HORARIO_DEF.duracion_comida_min,
-    tolerancia_min:      horarioActual?.tolerancia_min ?? HORARIO_DEF.tolerancia_min,
-    dias_laborales: horarioActual?.dias_laborales ?? [...HORARIO_DEF.dias_laborales],
+    hora_entrada:          horarioActual?.hora_entrada          || HORARIO_DEF.hora_entrada,
+    hora_salida:           horarioActual?.hora_salida           || HORARIO_DEF.hora_salida,
+    tiene_desayuno:        horarioActual?.tiene_desayuno        ?? HORARIO_DEF.tiene_desayuno,
+    duracion_desayuno_min: horarioActual?.duracion_desayuno_min ?? HORARIO_DEF.duracion_desayuno_min,
+    duracion_comida_min:   horarioActual?.duracion_comida_min   ?? HORARIO_DEF.duracion_comida_min,
+    tolerancia_min:        horarioActual?.tolerancia_min        ?? HORARIO_DEF.tolerancia_min,
+    dias_laborales:        horarioActual?.dias_laborales        ?? [...HORARIO_DEF.dias_laborales],
   });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState('');
@@ -72,14 +83,16 @@ function HorarioForm({ empleado, horarioActual, onGuardado, onCancelar }) {
     setGuardando(true); setErr('');
     try {
       const payload = {
-        empleado_id:         empleado.id,
-        organizacion_id:     empleado.organizacion_id,
-        hora_entrada:        form.hora_entrada,
-        hora_salida:         form.hora_salida,
-        duracion_comida_min: Number(form.duracion_comida_min),
-        tolerancia_min:      Number(form.tolerancia_min),
-        dias_laborales:      form.dias_laborales,
-        updated_at:          new Date().toISOString(),
+        empleado_id:           empleado.id,
+        organizacion_id:       empleado.organizacion_id,
+        hora_entrada:          form.hora_entrada,
+        hora_salida:           form.hora_salida,
+        tiene_desayuno:        form.tiene_desayuno,
+        duracion_desayuno_min: Number(form.duracion_desayuno_min),
+        duracion_comida_min:   Number(form.duracion_comida_min),
+        tolerancia_min:        Number(form.tolerancia_min),
+        dias_laborales:        form.dias_laborales,
+        updated_at:            new Date().toISOString(),
       };
       const { error } = horarioActual?.id
         ? await supabase.from('horarios_empleados').update(payload).eq('id', horarioActual.id)
@@ -140,6 +153,34 @@ function HorarioForm({ empleado, horarioActual, onGuardado, onCancelar }) {
           <TInput type="number" min={0} max={30} value={form.tolerancia_min}
             onChange={e => setForm(f => ({ ...f, tolerancia_min: e.target.value }))} />
         </div>
+      </div>
+
+      {/* Toggle desayuno */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+          <div onClick={() => setForm(f => ({ ...f, tiene_desayuno: !f.tiene_desayuno }))}
+            style={{
+              width: 38, height: 22, borderRadius: 11, position: 'relative',
+              background: form.tiene_desayuno ? T.teal : T.border,
+              transition: 'background 0.18s', flexShrink: 0,
+            }}>
+            <div style={{
+              position: 'absolute', top: 3, left: form.tiene_desayuno ? 19 : 3,
+              width: 16, height: 16, borderRadius: '50%', background: '#fff',
+              transition: 'left 0.18s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }} />
+          </div>
+          <span style={{ fontSize: 13, color: T.hi, fontWeight: 500 }}>
+            ☕ Incluir tiempo de desayuno
+          </span>
+        </label>
+        {form.tiene_desayuno && (
+          <div style={{ marginTop: 10, maxWidth: 180 }}>
+            <div style={{ fontSize: 11.5, color: T.lo, marginBottom: 4 }}>Duración desayuno (min)</div>
+            <TInput type="number" min={5} max={60} value={form.duracion_desayuno_min}
+              onChange={e => setForm(f => ({ ...f, duracion_desayuno_min: e.target.value }))} />
+          </div>
+        )}
       </div>
 
       {err && <div style={{ color: T.crit, fontSize: 12, marginBottom: 10 }}>{err}</div>}
@@ -253,10 +294,11 @@ export default function AsistenciaTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: T.canvas }}>
-                  {['Empleado', ...Object.values(TIPOS_LABELS), 'Estado'].map(h => (
+                  {['Empleado', 'Entrada', '☕ Sale', '☕ Regresa', '🍽️ Sale', '🍽️ Regresa', 'Salida', 'Estado'].map(h => (
                     <th key={h} style={{ padding: '8px 12px', textAlign: 'left',
                       fontSize: 11, fontWeight: 700, color: T.lo, textTransform: 'uppercase',
-                      letterSpacing: '0.07em', borderBottom: `1px solid ${T.border}` }}>
+                      letterSpacing: '0.07em', borderBottom: `1px solid ${T.border}`,
+                      whiteSpace: 'nowrap' }}>
                       {h}
                     </th>
                   ))}
@@ -264,17 +306,24 @@ export default function AsistenciaTab() {
               </thead>
               <tbody>
                 {empleados.map((e, i) => {
-                  const ms = marcajesHoy.filter(m => m.empleado_id === e.id);
-                  const estado = calcEstado(ms);
-                  const st = ESTADO_STYLE[estado];
+                  const ms      = marcajesHoy.filter(m => m.empleado_id === e.id);
+                  const hor     = horarios.find(h => h.empleado_id === e.id) || HORARIO_DEF;
+                  const estado  = calcEstado(ms, hor);
+                  const st      = ESTADO_STYLE[estado];
+                  const allTipos = ['entrada','inicio_desayuno','fin_desayuno','inicio_comida','fin_comida','salida'];
                   return (
                     <tr key={e.id} style={{ background: i % 2 === 0 ? T.surface : T.canvas,
                       borderBottom: `1px solid ${T.border}` }}>
                       <td style={{ padding: '9px 12px', fontWeight: 600, color: T.hi }}>
                         {e.nombre_completo}
                       </td>
-                      {TIPOS_ORDEN.map(tipo => {
+                      {allTipos.map(tipo => {
                         const m = ms.find(x => x.tipo === tipo);
+                        const esDesayuno = tipo.includes('desayuno');
+                        const tieneDesayuno = hor.tiene_desayuno;
+                        if (esDesayuno && !tieneDesayuno && !m) {
+                          return <td key={tipo} style={{ padding: '9px 12px', color: T.border, fontSize: 12 }}>—</td>;
+                        }
                         return (
                           <td key={tipo} style={{ padding: '9px 12px', color: T.mid }}>
                             {m ? (
@@ -302,7 +351,7 @@ export default function AsistenciaTab() {
                 })}
                 {empleados.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ padding: 24, textAlign: 'center', color: T.lo }}>
+                    <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: T.lo }}>
                       No hay empleados activos registrados.
                     </td>
                   </tr>
@@ -333,8 +382,9 @@ export default function AsistenciaTab() {
                         {(hor.dias_laborales || []).map(d => DIAS_LABELS[d]).join(', ')}
                         {' · '}
                         {hor.hora_entrada} – {hor.hora_salida}
+                        {hor.tiene_desayuno && ` · ☕ Desayuno ${hor.duracion_desayuno_min} min`}
                         {' · '}
-                        Almuerzo {hor.duracion_comida_min} min
+                        🍽️ Almuerzo {hor.duracion_comida_min} min
                         {' · '}
                         Tolerancia {hor.tolerancia_min} min
                       </div>
