@@ -21,7 +21,7 @@ function Line({ label, value, bold, accent, large }) {
   );
 }
 
-export function ResumenCuadre({ cajaBase, ingresoNum, totalGastos, totalDepositos,
+export function ResumenCuadre({ cajaBase, sobrante, ingresoNum, totalGastos, totalDepositos,
   depositoEsperado, cajaFinal, diferencia }) {
   const sem = semaforo(diferencia);
 
@@ -32,10 +32,13 @@ export function ResumenCuadre({ cajaBase, ingresoNum, totalGastos, totalDeposito
       <div style={{ fontSize:11, fontWeight:700, color:T.lo, textTransform:'uppercase',
         letterSpacing:'0.08em', marginBottom:12 }}>Resumen del cuadre</div>
 
-      <Line label="Caja base"            value={cajaBase} />
-      <Line label="+ Ingreso 4DLab"      value={ingresoNum} accent={T.ok} />
-      <Line label="− Total gastos"        value={totalGastos} accent={totalGastos>0?T.crit:T.lo} />
-      <Line label="− Total depósitos"     value={totalDepositos} accent={totalDepositos>0?'#7C3AED':T.lo} />
+      <Line label="Caja base"              value={cajaBase} />
+      {sobrante > 0 && (
+        <Line label="+ Sobrante anterior"  value={sobrante} accent={T.warn} />
+      )}
+      <Line label="+ Ingreso 4DLab"        value={ingresoNum} accent={T.ok} />
+      <Line label="− Total gastos"          value={totalGastos} accent={totalGastos>0?T.crit:T.lo} />
+      <Line label="− Total depósitos"       value={totalDepositos} accent={totalDepositos>0?'#7C3AED':T.lo} />
 
       <div style={{ margin:'12px 0 8px', borderTop:`2px solid ${T.border}` }} />
 

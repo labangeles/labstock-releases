@@ -158,19 +158,21 @@ export function useCuadre(sedeId, profile) {
     return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [sedeId, isOnline]);
 
-  // Cálculos
+  // Cálculos — el sobrante anterior se suma al inicio del día (es efectivo físico en caja)
   const totalGastosCents      = gastos.reduce((s,g)=>s+Math.round(Number(g.monto)*100),0);
   const totalDepositosCents   = depositos.reduce((s,d)=>s+Math.round(Number(d.monto)*100),0);
   const ingresoCents          = Math.round(Number(cuadre?.ingreso_dia||0)*100);
   const cajaBaseCents         = Math.round(Number(cuadre?.caja_base||800)*100);
-  const depositoEsperadoCents = ingresoCents - totalGastosCents;
-  const cajaFinalCents        = cajaBaseCents + ingresoCents - totalGastosCents - totalDepositosCents;
+  const sobranteCents         = soranteAnterior ? Math.round(soranteAnterior.monto * 100) : 0;
+  const depositoEsperadoCents = sobranteCents + ingresoCents - totalGastosCents;
+  const cajaFinalCents        = cajaBaseCents + sobranteCents + ingresoCents - totalGastosCents - totalDepositosCents;
   const diferenciaCents       = cajaFinalCents - cajaBaseCents;
 
   const totalGastos      = totalGastosCents / 100;
   const totalDepositos   = totalDepositosCents / 100;
   const ingresoNum       = ingresoCents / 100;
   const cajaBase         = cajaBaseCents / 100;
+  const sobrante         = sobranteCents / 100;
   const depositoEsperado = depositoEsperadoCents / 100;
   const cajaFinal        = cajaFinalCents / 100;
   const diferencia       = diferenciaCents / 100;
@@ -330,7 +332,7 @@ export function useCuadre(sedeId, profile) {
   return {
     cuadre, gastos, depositos, loading, saving, isOpen, rlsError, fromCache,
     totalGastos, totalDepositos, ingresoNum,
-    cajaBase, depositoEsperado, cajaFinal, diferencia,
+    cajaBase, sobrante, depositoEsperado, cajaFinal, diferencia,
     soranteAnterior,
     saveIngreso, addGasto, deleteGasto, addDeposito, deleteDeposito,
     cerrar, reabrir, reload: load,

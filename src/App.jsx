@@ -12,6 +12,7 @@ import { ComprasScreen } from "./features/compras/ComprasScreen";
 import { GastosFijosScreen } from "./features/admin/GastosFijosScreen";
 import { AnalisisFinancieroScreen } from "./features/admin/AnalisisFinancieroScreen";
 import { InicioScreen } from "./features/inicio/InicioScreen";
+import { RRHHScreen } from "./features/rrhh/RRHHScreen";
 
 /* ── DATOS ───────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -290,6 +291,8 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
     {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
   ] : [];
 
+  const navRRHH = [{id:'rrhh', label:'Recursos Humanos', Icon:Ico.Users}];
+
   const navCaja = cajaPerm ? [
     ...(!isAuditor ? [{id:'caja_dia', label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
     ...(isAuditor  ? [{id:'auditoria', label:'Resumen', Icon:Ico.BarChart}] : []),
@@ -366,6 +369,11 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
             ))}
           </>
         )}
+        <SectionLabel label="RRHH"/>
+        {navRRHH.map(({id,label,Icon})=>(
+          <NavBtn key={id} id={id} label={label} Icon={Icon} badge={0}
+            active={view===id} onNav={onNav}/>
+        ))}
       </nav>
 
       <div style={{padding:'10px 16px 14px',borderTop:`1px solid ${T.border}`}}>
@@ -674,8 +682,14 @@ function ImportModal({onImport,onClose}) {
           inp.onchange=e=>{
             const f=e.target.files[0]; if(!f){rej();return;}
             const reader=new FileReader();
-            reader.onload=ev=>res(ev.target.result);
-            reader.readAsText(f);
+            reader.onload=ev=>{
+              const buf=ev.target.result;
+              let text;
+              try{ text=new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+              catch{ text=new TextDecoder('windows-1252').decode(buf); }
+              res(text);
+            };
+            reader.readAsArrayBuffer(f);
           };
           inp.click();
         });
@@ -689,9 +703,13 @@ function ImportModal({onImport,onClose}) {
   const confirm=async()=>{
     if(!rows?.length) return;
     setLoading(true);
-    await onImport(rows);
-    setLoading(false);
-    onClose();
+    try{
+      await onImport(rows);
+      onClose();
+    } catch(e){
+      setError(e.message||'Error al importar.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -1158,7 +1176,7 @@ function UsuariosScreen({sedes}) {
   const [editModal,setEditModal] = useState(null); // user object or null
   const [toast,setToast]     = useState('');
   const [form,setForm]       = useState({nombre:'',codigo:'',password:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
-  const [editForm,setEditForm] = useState({nombre:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false});
+  const [editForm,setEditForm] = useState({nombre:'',rol:'tecnico',sedeId:'',permBodega:true,permCaja:false,newPassword:''});
   const [saving,setSaving]   = useState(false);
   const [err,setErr]         = useState('');
   const [editErr,setEditErr] = useState('');
@@ -1179,6 +1197,7 @@ function UsuariosScreen({sedes}) {
       sedeId:    u.sede_id||'',
       permBodega: u.permisos?.bodega!==false,
       permCaja:   u.permisos?.caja===true,
+      newPassword:'',
     });
     setEditModal(u);
   };
@@ -1191,7 +1210,7 @@ function UsuariosScreen({sedes}) {
     if(!/^[a-z0-9._-]+$/i.test(form.codigo.trim())){
       setErr('El código solo puede tener letras, números, puntos y guiones.'); return;
     }
-    if(form.password.length<6){setErr('La contraseña debe tener al menos 6 caracteres.'); return;}
+    if(form.password.length<3){setErr('La contraseña debe tener al menos 3 caracteres.'); return;}
     if((form.rol==='tecnico'||form.rol==='secretaria')&&!form.sedeId){setErr('Selecciona la sede asignada.'); return;}
     setSaving(true);
     const emailInterno=form.codigo.trim().toLowerCase()+'@labstock.gt';
@@ -1218,7 +1237,12 @@ function UsuariosScreen({sedes}) {
     setEditErr('');
     if(!editForm.nombre.trim()){setEditErr('El nombre es obligatorio.');return;}
     if((editForm.rol==='tecnico'||editForm.rol==='secretaria')&&!editForm.sedeId){setEditErr('Selecciona la sede asignada.');return;}
+    if(editForm.newPassword&&editForm.newPassword.length<3){setEditErr('La contraseña debe tener al menos 3 caracteres.');return;}
     setSaving(true);
+    if(editForm.newPassword.trim()){
+      const rp=await window.electronAPI?.resetPassword({userId:editModal.id,password:editForm.newPassword.trim()});
+      if(rp?.error){setEditErr('Error al cambiar contraseña: '+rp.error);setSaving(false);return;}
+    }
     const permisos=editForm.rol==='tecnico'
       ?{bodega:editForm.permBodega,caja:editForm.permCaja}
       :editForm.rol==='secretaria'
@@ -1244,6 +1268,13 @@ function UsuariosScreen({sedes}) {
     if(r?.error){showToast('❌ '+r.error);return;}
     load();
     showToast('Usuario deshabilitado');
+  };
+
+  const enable=async(u)=>{
+    const r=await window.electronAPI?.enableUser(u.id);
+    if(r?.error){showToast('❌ '+r.error);return;}
+    load();
+    showToast('✅ Usuario habilitado');
   };
 
   const rolBadge=rol=>({
@@ -1313,6 +1344,11 @@ function UsuariosScreen({sedes}) {
                 borderRadius:20,background:rb.bg,color:rb.c,fontSize:11,fontWeight:600}}>{rb.label}</span>
               <span style={{fontSize:12,color:T.mid}}>{u.sedes?.nombre||'—'}</span>
               <div style={{display:'flex',gap:2,justifyContent:'flex-end'}}>
+                {!u.activo&&(
+                  <IconBtn icon={<Ico.Check s={13}/>} title="Habilitar usuario"
+                    onClick={()=>enable(u)}
+                    style={{color:T.ok,background:'transparent'}}/>
+                )}
                 {u.activo&&(
                   <IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>openEdit(u)} title="Editar rol y permisos"/>
                 )}
@@ -1344,7 +1380,7 @@ function UsuariosScreen({sedes}) {
           <TInput value={form.codigo} onChange={e=>setForm(f=>({...f,codigo:e.target.value.toLowerCase()}))}
             placeholder="Ej: sta01"/>
         </Field>
-        <Field label="Contraseña (mínimo 6 caracteres)">
+        <Field label="Contraseña (mínimo 3 caracteres)">
           <TInput type="password" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))}
             placeholder="Contraseña segura"/>
         </Field>
@@ -1477,6 +1513,11 @@ function UsuariosScreen({sedes}) {
               </Field>
             )}
             <RolInfo rol={editForm.rol}/>
+            <Field label="Nueva contraseña" hint="Déjalo vacío para no cambiarla">
+              <TInput type="password" value={editForm.newPassword}
+                onChange={e=>setEditForm(f=>({...f,newPassword:e.target.value}))}
+                placeholder="Escribir solo si se desea cambiar"/>
+            </Field>
             {editErr&&<div style={{background:T.critBg,borderRadius:8,padding:'10px 12px',fontSize:12.5,color:T.crit,marginBottom:12}}>{editErr}</div>}
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:8}}>
               <Btn variant="secondary" onClick={()=>{setEditModal(null);setEditErr('');}}>Cancelar</Btn>
@@ -1526,7 +1567,7 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
   const selectedList=sorted.filter(i=>selected[i.id]);
 
   const submit=async()=>{
-    if(!selectedList.length){alert('Selecciona al menos un insumo.');return;}
+    if(!selectedList.length) return;
     setSaving(true);
     await onSubmit({
       destino,
@@ -1613,8 +1654,8 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
                   style={{display:'grid',gridTemplateColumns:'32px 1fr 90px 80px',
                     padding:'9px 12px',alignItems:'center',gap:8,cursor:'pointer',
                     borderBottom:i<visible.length-1?`1px solid ${T.border}`:'none',
-                    background:isSel?'#F0FAFA':'transparent',transition:'background 0.1s'}}
-                  onMouseEnter={e=>!isSel&&(e.currentTarget.style.background='#F6FAFB')}
+                    background:isSel?T.tealXL:'transparent',transition:'background 0.1s'}}
+                  onMouseEnter={e=>!isSel&&(e.currentTarget.style.background=T.tealXL)}
                   onMouseLeave={e=>!isSel&&(e.currentTarget.style.background='transparent')}>
                   <input type="checkbox" checked={isSel} readOnly
                     style={{width:15,height:15,cursor:'pointer',accentColor:T.teal}}/>
@@ -1660,7 +1701,7 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
 /* ═══════════════════════════════════════════════════════════
    PEDIDO CARD
 ═══════════════════════════════════════════════════════════ */
-function PedidoCard({pedido,expanded,onToggle,onUpdateStatus,canManageIncoming,currentSedeId,isAdmin,saving}) {
+function PedidoCard({pedido,expanded,onToggle,onUpdateStatus,onDelete,canManageIncoming,currentSedeId,isAdmin,saving}) {
   const os=ORDER_STATUS[pedido.estado]||ORDER_STATUS.pendiente;
   const isOrigin=pedido.sede_origen_id===currentSedeId;
   const isExt=pedido.tipo==='externa';
@@ -1757,6 +1798,13 @@ function PedidoCard({pedido,expanded,onToggle,onUpdateStatus,canManageIncoming,c
             {isAdmin&&['en_proceso','enviado'].includes(pedido.estado)&&(
               <Btn size="sm" variant="danger" onClick={()=>onUpdateStatus('cancelado')} disabled={saving}>
                 Cancelar
+              </Btn>
+            )}
+            {/* Admin: eliminar pedido del historial */}
+            {isAdmin&&(
+              <Btn size="sm" variant="danger" icon={<Ico.Trash s={13}/>}
+                onClick={()=>onDelete(pedido)} disabled={saving}>
+                Eliminar
               </Btn>
             )}
           </div>
@@ -1912,6 +1960,16 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
     setSaving(false);
   };
 
+  const deletePedido=async(pedido)=>{
+    if(!window.confirm(`¿Eliminar el pedido ${pedido.referencia} del historial? Esta acción no se puede deshacer.`)) return;
+    setSaving(true);
+    await supabase.from('pedido_items').delete().eq('pedido_id',pedido.id);
+    await supabase.from('pedidos').delete().eq('id',pedido.id);
+    loadPedidos();
+    setSaving(false);
+    showToast(`🗑️ Pedido ${pedido.referencia} eliminado`);
+  };
+
   const isEmpty=displayed.length===0;
 
   return (
@@ -1973,6 +2031,7 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
               expanded={expandedId===p.id}
               onToggle={()=>setExpandedId(expandedId===p.id?null:p.id)}
               onUpdateStatus={s=>updateStatus(p,s)}
+              onDelete={deletePedido}
               canManageIncoming={canManageIncoming}
               currentSedeId={currentSedeId}
               isAdmin={isAdmin}
@@ -2202,16 +2261,16 @@ export default function App() {
     if(!profile) prevProfileId.current = null;
   },[profile]);
 
-  // Auditor: solo puede ver auditoria, caja_historial, compras
+  // Auditor: solo puede ver auditoria, caja_historial, compras, rrhh
   useEffect(()=>{
-    if(isAuditor && !['inicio','auditoria','caja_historial','compras','gastos_fijos'].includes(view)) setView('inicio');
+    if(isAuditor && !['inicio','auditoria','caja_historial','compras','gastos_fijos','rrhh'].includes(view)) setView('inicio');
   },[isAuditor,view]);
 
 
-  // Secretaria: solo puede ver compras (y caja si tiene permiso)
+  // Secretaria: solo puede ver compras (y caja si tiene permiso), rrhh
   useEffect(()=>{
     if(!isSecretaria) return;
-    const allowed=['inicio','compras','inventario'];
+    const allowed=['inicio','compras','inventario','rrhh'];
     if(profile?.permisos?.caja===true) allowed.push('caja_dia','caja_historial');
     if(!allowed.includes(view)) setView('inicio');
   },[isSecretaria,view,profile?.permisos?.caja]);
@@ -2352,10 +2411,11 @@ export default function App() {
   };
 
   const handleImport=async(rows)=>{
-    if(!currentSedeId){alert('Selecciona una sede antes de importar.');return;}
+    if(!currentSedeId) throw new Error('Selecciona una sede antes de importar.');
     const inserts=rows.map(r=>({...toDB(r,currentSedeId,profile.id)}));
-    const {error}=await supabase.from('items').insert(inserts);
-    if(error){alert('Error al importar: '+error.message);return;}
+    const {error}=await supabase.from('items')
+      .upsert(inserts,{onConflict:'codigo,sede_id',ignoreDuplicates:false});
+    if(error) throw new Error(error.message);
     await logAct(currentSedeId,currentSedeName,null,`${rows.length} insumos`,profile.id,profile.nombre,'importar',undefined,rows.length,null);
     loadItems();
   };
@@ -2486,6 +2546,9 @@ export default function App() {
           {view==="caja_historial"&&cajaPerm&&(
             <HistorialCajaScreen
               profile={profile} isAdmin={isAdmin} sedes={sedes}/>
+          )}
+          {view==="rrhh"&&(
+            <RRHHScreen/>
           )}
         </main>
       </div>

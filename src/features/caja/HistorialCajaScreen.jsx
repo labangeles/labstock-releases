@@ -16,7 +16,7 @@ const semaforo = dif => {
 };
 
 /* Detalle de un cuadre (solo lectura) */
-function DetallePanel({ cuadreId, abiertoPasado, isAdmin, onCerrar, cerrando }) {
+function DetallePanel({ cuadreId, abiertoPasado, isAdmin, onCerrar, cerrando, notas, diferencia, totalDepositos }) {
   const [gastos, setGastos]       = useState([]);
   const [depositos, setDepositos] = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -62,6 +62,37 @@ function DetallePanel({ cuadreId, abiertoPasado, isAdmin, onCerrar, cerrando }) 
               opacity: cerrando ? 0.6 : 1, whiteSpace:'nowrap', flexShrink:0 }}>
             {cerrando ? 'Cerrando...' : '⚑ Cerrar cuadre'}
           </button>
+        </div>
+      )}
+
+      {/* Alerta: sin depósito */}
+      {!abiertoPasado && totalDepositos === 0 && (
+        <div style={{ background:T.warnBg, border:`1px solid ${T.warn}55`, borderRadius:8,
+          padding:'10px 14px', marginBottom:14, fontSize:12.5, color:T.warn, fontWeight:600 }}>
+          ⚠ No se registró depósito en este cuadre.
+          {notas && <div style={{ fontWeight:400, marginTop:4, color:T.hi }}>{notas}</div>}
+        </div>
+      )}
+
+      {/* Comentario: sobrante con nota */}
+      {!abiertoPasado && diferencia > 0 && notas && totalDepositos > 0 && (
+        <div style={{ background:T.warnBg, border:`1px solid ${T.warn}55`, borderRadius:8,
+          padding:'10px 14px', marginBottom:14, fontSize:12.5 }}>
+          <div style={{ fontWeight:700, color:T.warn, marginBottom:4 }}>
+            Nota de sobrante
+          </div>
+          <div style={{ color:T.hi }}>{notas}</div>
+        </div>
+      )}
+
+      {/* Comentario: faltante con nota */}
+      {!abiertoPasado && diferencia < 0 && notas && (
+        <div style={{ background:T.critBg, border:`1px solid ${T.crit}55`, borderRadius:8,
+          padding:'10px 14px', marginBottom:14, fontSize:12.5 }}>
+          <div style={{ fontWeight:700, color:T.crit, marginBottom:4 }}>
+            Nota de faltante
+          </div>
+          <div style={{ color:T.hi }}>{notas}</div>
         </div>
       )}
 
@@ -336,7 +367,10 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
                     abiertoPasado={abiertoPasado}
                     isAdmin={isAdmin}
                     cerrando={cerrando === c.id}
-                    onCerrar={() => cerrarForzado(c)}/>
+                    onCerrar={() => cerrarForzado(c)}
+                    notas={c.notas}
+                    diferencia={Number(c.diferencia)}
+                    totalDepositos={Number(c.total_depositos)}/>
                 )}
               </div>
             );

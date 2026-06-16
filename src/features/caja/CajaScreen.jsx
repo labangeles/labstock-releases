@@ -55,7 +55,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
   const {
     cuadre, gastos, depositos, loading, saving, isOpen, rlsError,
     totalGastos, totalDepositos, ingresoNum,
-    cajaBase, depositoEsperado, cajaFinal, diferencia,
+    cajaBase, sobrante, depositoEsperado, cajaFinal, diferencia,
     soranteAnterior,
     saveIngreso, addGasto, deleteGasto, addDeposito, deleteDeposito,
     cerrar, reabrir,
@@ -262,7 +262,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
         </div>
 
         <ResumenCuadre
-          cajaBase={cajaBase} ingresoNum={ingresoNum}
+          cajaBase={cajaBase} sobrante={sobrante} ingresoNum={ingresoNum}
           totalGastos={totalGastos} totalDepositos={totalDepositos}
           depositoEsperado={depositoEsperado} cajaFinal={cajaFinal} diferencia={diferencia}
         />

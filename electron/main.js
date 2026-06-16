@@ -295,6 +295,42 @@ ipcMain.handle('reset-machine-id', async (_, userId) => {
   }
 })
 
+/* ── IPC: RESTABLECER CONTRASEÑA ───────────────────────── */
+ipcMain.handle('reset-password', async (_, { userId, password }) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Credenciales no configuradas.' }
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    const { error } = await admin.auth.admin.updateUserById(userId, { password })
+    if (error) return { error: error.message }
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
+/* ── IPC: HABILITAR USUARIO ─────────────────────────────── */
+ipcMain.handle('enable-user', async (_, userId) => {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const serviceKey  = process.env.SUPABASE_SERVICE_KEY
+  if (!supabaseUrl || !serviceKey) return { error: 'Credenciales no configuradas.' }
+  try {
+    const { createClient } = require('@supabase/supabase-js')
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+    await admin.auth.admin.updateUserById(userId, { ban_duration: 'none' })
+    await admin.from('profiles').update({ activo: true }).eq('id', userId)
+    return { success: true }
+  } catch (e) {
+    return { error: e.message }
+  }
+})
+
 /* ── IPC: DESHABILITAR USUARIO ──────────────────────────── */
 ipcMain.handle('disable-user', async (_, userId) => {
   const supabaseUrl = process.env.VITE_SUPABASE_URL

@@ -91,14 +91,14 @@ export function Btn({children,variant='primary',icon,onClick,size='md',disabled,
   );
 }
 
-export function IconBtn({icon,onClick,danger,title}) {
+export function IconBtn({icon,onClick,danger,title,style}) {
   const [hov,setHov]=useState(false);
   return (
     <button onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       title={title}
       style={{background:hov?(danger?T.critBg:T.tealXL):'transparent',border:'none',cursor:'pointer',
-        padding:6,borderRadius:6,color:hov?(danger?T.crit:T.tealDk):T.lo,
-        display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.1s'}}>
+        padding:6,borderRadius:6,color:hov?(danger?T.crit:T.tealDk):T.mid,
+        display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.1s',...style}}>
       {icon}
     </button>
   );
@@ -157,7 +157,8 @@ export function TInput({value,onChange,placeholder,type='text',min,max,focusOnMo
         borderRadius:8,fontFamily:'inherit',fontSize:13.5,color:T.hi,
         background:disabled?T.canvas:'var(--input-bg)',
         outline:'none',transition:'border-color 0.12s',boxSizing:'border-box',
-        cursor:disabled?'not-allowed':'text'}}/>
+        cursor:disabled?'not-allowed':'text',
+        }}/>
   );
 }
 

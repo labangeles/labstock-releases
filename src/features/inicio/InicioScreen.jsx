@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { T, Ico, fmtQ } from '../../shared/ui';
+import { urlFirmada } from '../rrhh/lib/storage';
+import { AlertasRRHH }       from './components/AlertasRRHH';
+import { PromocionesSection } from './components/PromocionesSection';
 
 /* ── Frases inspiradoras (rotan por día del año) ─────────── */
 const FRASES = [
@@ -58,6 +61,67 @@ function AlertCard({ color, bg, icon, titulo, descripcion, accion, onClick }) {
   );
 }
 
+/* ── Mapa de reconocimientos (icono + descripción) ───────── */
+const RECON_MAP = {
+  'Empleado del mes':          { icono: '⭐', desc: 'Reconocimiento mensual al colaborador más destacado.' },
+  'Puntualidad sobresaliente': { icono: '⏰', desc: 'Cumplimiento ejemplar de horarios de entrada y salida.' },
+  'Desempeño excepcional':     { icono: '🏆', desc: 'Resultados que superan las expectativas del puesto.' },
+  'Espíritu de equipo':        { icono: '🤝', desc: 'Apoyo constante a compañeros y ambiente de trabajo positivo.' },
+  'Calidad en resultados':     { icono: '🔬', desc: 'Precisión y cuidado en el procesamiento y reporte de muestras.' },
+  'Iniciativa y proactividad': { icono: '💡', desc: 'Identificación y resolución de problemas sin necesidad de ser indicado.' },
+  'Años de servicio':          { icono: '📅', desc: 'Reconocimiento por trayectoria y fidelidad con la organización.' },
+  'Atención al paciente':      { icono: '😊', desc: 'Trato amable, empático y profesional hacia los pacientes.' },
+  'Superación de metas':       { icono: '📈', desc: 'Logro o superación de los objetivos establecidos para el período.' },
+  'Actitud positiva':          { icono: '🌟', desc: 'Disposición y energía que inspiran a los demás en el equipo.' },
+  'Compromiso con la calidad': { icono: '🛡️', desc: 'Adherencia estricta a protocolos y buenas prácticas de laboratorio.' },
+  'Innovación y mejora':       { icono: '🚀', desc: 'Propuesta o implementación de mejoras en procesos internos.' },
+};
+
+function BadgeReconocimiento({ asunto }) {
+  const [hov, setHov] = useState(false);
+  const r = RECON_MAP[asunto] || { icono: '🏅', desc: asunto };
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
+      <div style={{
+        width: 36, height: 36, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.18)',
+        border: '2px solid rgba(255,255,255,0.35)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 17, cursor: 'default', userSelect: 'none',
+        transition: 'transform 0.13s, background 0.13s',
+        transform: hov ? 'scale(1.18)' : 'scale(1)',
+        background: hov ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.18)',
+      }}>
+        {r.icono}
+      </div>
+      {hov && (
+        <div style={{
+          position: 'absolute', bottom: 44, left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(15,23,32,0.94)', color: '#fff',
+          borderRadius: 9, padding: '9px 13px',
+          fontSize: 12, width: 195, zIndex: 200,
+          lineHeight: 1.5, pointerEvents: 'none',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+          whiteSpace: 'normal',
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 12.5 }}>{asunto}</div>
+          <div style={{ opacity: 0.75, fontSize: 11.5 }}>{r.desc}</div>
+          <div style={{
+            position: 'absolute', bottom: -6, left: '50%',
+            transform: 'translateX(-50%)',
+            width: 0, height: 0,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderTop: '6px solid rgba(15,23,32,0.94)',
+          }}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── InicioScreen ────────────────────────────────────────── */
 export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria, cajaPerm, currentSedeId, onNav }) {
   const now = new Date();
@@ -78,14 +142,44 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
     return words.find(w => !w.endsWith('.')) || words[0] || 'bienvenido/a';
   })();
 
+  const iniciales = primerNombre?.[0]?.toUpperCase() || '?';
+
+  /* ── Foto y reconocimientos del mes actual ── */
+  const [fotoUrl, setFotoUrl] = useState(null);
+  const [badges, setBadges] = useState([]);
+  useEffect(() => {
+    if (!profile?.id) return;
+    const hoy   = new Date();
+    const y     = hoy.getFullYear();
+    const m     = String(hoy.getMonth() + 1).padStart(2, '0');
+    const desde = `${y}-${m}-01`;
+    const hasta = new Date(y, hoy.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    supabase.from('empleados').select('id, foto_path').eq('profile_id', profile.id).maybeSingle()
+      .then(({ data: emp }) => {
+        if (!emp) return;
+        if (emp.foto_path) urlFirmada('rrhh-fotos', emp.foto_path).then(setFotoUrl);
+        supabase.from('acciones_disciplinarias')
+          .select('asunto')
+          .eq('empleado_id', emp.id)
+          .eq('tipo', 'reconocimiento')
+          .gte('fecha', desde)
+          .lte('fecha', hasta)
+          .order('fecha', { ascending: false })
+          .then(({ data }) => {
+            const vistos = new Set();
+            setBadges((data || []).filter(r => {
+              if (vistos.has(r.asunto)) return false;
+              vistos.add(r.asunto); return true;
+            }));
+          });
+      });
+  }, [profile?.id]);
+
   /* ── Qué alertas aplican por rol ── */
-  // Inventario: admin + tecnico + secretaria (no auditor — no tiene acceso a bodega)
   const showInventario = !isAuditor;
-  // Cuadres: admin, auditor (ven todas las sedes), o cualquiera con permiso de caja
   const showCuadres    = isAdmin || isAuditor || cajaPerm;
-  // Gastos fijos: solo admin
   const showGastos     = isAdmin;
-  // Pedidos: admin + tecnico (no auditor, no secretaria — no tienen sección de pedidos)
   const showPedidos    = !isAuditor && !isSecretaria;
 
   const [cuadresAbiertos, setCuadres] = useState(0);
@@ -103,7 +197,6 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
         .select('*', { count:'exact', head:true })
         .eq('estado', 'abierto')
         .lte('fecha', today);
-      // Admin y auditor ven todas las sedes; el resto solo la suya
       if (!isAdmin && !isAuditor && currentSedeId) q = q.eq('sede_id', currentSedeId);
       return q.then(({ count }) => setCuadres(count || 0));
     })() : Promise.resolve();
@@ -126,46 +219,72 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
     Promise.all([p1, p2, p3]).finally(() => setLoad(false));
   }, [isAdmin, isAuditor, isSecretaria, cajaPerm, currentSedeId]);
 
-  /* Insumos críticos — solo roles con acceso a bodega */
-  const critItems = showInventario
-    ? items.filter(i => ['crit','out'].includes(getStatusSimple(i)))
-    : [];
-
-  /* Destino de navegación para inventario según rol */
+  const critItems     = showInventario ? items.filter(i => ['crit','out'].includes(getStatusSimple(i))) : [];
   const navInventario = isSecretaria ? 'inventario' : 'alertas';
-
-  const hayAlertas = critItems.length > 0 || cuadresAbiertos > 0 ||
+  const hayAlertas    = critItems.length > 0 || cuadresAbiertos > 0 ||
     (showGastos && gastosPend > 0) || (showPedidos && pedidosPend > 0);
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
 
-      {/* ── Hero: saludo + frase ── */}
+      {/* ── Hero: saludo + frase + foto ── */}
       <div style={{
         background: `linear-gradient(135deg, ${T.teal} 0%, ${T.tealDk} 100%)`,
         borderRadius: 18, padding: '30px 34px', color: '#fff',
         boxShadow: `0 8px 28px ${T.teal}44`,
+        display: 'flex', alignItems: 'center', gap: 28,
       }}>
-        <div style={{ fontSize:12.5, opacity:0.8, textTransform:'capitalize', marginBottom:6 }}>
-          {fecha}
-        </div>
-        <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.03em', marginBottom:0, lineHeight:1.2 }}>
-          {saludo},
-        </div>
-        <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.03em', marginBottom:18, lineHeight:1.2 }}>
-          {primerNombre}
-        </div>
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.22)', paddingTop:16 }}>
-          <div style={{ fontSize:14, fontStyle:'italic', opacity:0.92, lineHeight:1.6 }}>
-            "{frase.texto}"
+        {/* Texto */}
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize:12.5, opacity:0.8, textTransform:'capitalize', marginBottom:6 }}>
+            {fecha}
           </div>
-          {frase.autor && (
-            <div style={{ fontSize:12, opacity:0.65, marginTop:6 }}>— {frase.autor}</div>
+          <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.03em', lineHeight:1.2 }}>
+            {saludo},
+          </div>
+          <div style={{ fontSize:26, fontWeight:800, letterSpacing:'-0.03em', marginBottom:18, lineHeight:1.2 }}>
+            {primerNombre}
+          </div>
+          <div style={{ borderTop:'1px solid rgba(255,255,255,0.22)', paddingTop:16 }}>
+            <div style={{ fontSize:14, fontStyle:'italic', opacity:0.92, lineHeight:1.6 }}>
+              "{frase.texto}"
+            </div>
+            {frase.autor && (
+              <div style={{ fontSize:12, opacity:0.65, marginTop:6 }}>— {frase.autor}</div>
+            )}
+          </div>
+        </div>
+
+        {/* Foto + badges del mes */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{
+            width: 120, height: 120, borderRadius: '50%',
+            overflow: 'hidden', border: '3px solid rgba(255,255,255,0.35)',
+            background: 'rgba(255,255,255,0.15)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {fotoUrl
+              ? <img src={fotoUrl} alt="foto" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : <span style={{ fontSize: 48, fontWeight: 700, color: 'rgba(255,255,255,0.9)' }}>
+                  {iniciales}
+                </span>
+            }
+          </div>
+          {badges.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 150 }}>
+              {badges.map((b) => <BadgeReconocimiento key={b.asunto} asunto={b.asunto} />)}
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Alertas ── */}
+      {/* ── Promociones del mes ── */}
+      <PromocionesSection profile={profile} isAdmin={isAdmin} />
+
+      {/* ── Alertas RRHH personales ── */}
+      <AlertasRRHH profile={profile} onNav={onNav} />
+
+      {/* ── Alertas de sistema ── */}
       {loading ? (
         <div style={{ textAlign:'center', padding:'32px 0', color:T.lo, fontSize:13 }}>
           Verificando áreas…
@@ -193,9 +312,7 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
             letterSpacing:'0.09em' }}>
             Requieren atención
           </div>
-
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))', gap:12 }}>
-
             {critItems.length > 0 && (
               <AlertCard
                 color={T.crit} bg={T.critBg}
@@ -206,7 +323,6 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
                 onClick={() => onNav(navInventario)}
               />
             )}
-
             {cuadresAbiertos > 0 && (
               <AlertCard
                 color={T.warn} bg={T.warnBg}
@@ -217,7 +333,6 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
                 onClick={() => onNav('caja_historial')}
               />
             )}
-
             {showGastos && gastosPend > 0 && (
               <AlertCard
                 color="#7C3AED" bg="#F5F3FF"
@@ -228,7 +343,6 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
                 onClick={() => onNav('gastos_fijos')}
               />
             )}
-
             {showPedidos && pedidosPend > 0 && (
               <AlertCard
                 color={T.tealDk} bg={T.tealXL}

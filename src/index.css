@@ -70,6 +70,15 @@
   --shadow-modal: 0 20px 60px rgba(0,0,0,0.60);
 }
 
+/* ── COLOR-SCHEME para inputs de fecha ──────────────────────── */
+:root[data-theme="dark"]  input[type="date"],
+:root[data-theme="dark"]  input[type="datetime-local"],
+:root[data-theme="dark"]  input[type="time"] { color-scheme: dark; }
+
+:root[data-theme="light"] input[type="date"],
+:root[data-theme="light"] input[type="datetime-local"],
+:root[data-theme="light"] input[type="time"] { color-scheme: light; }
+
 /* ── ANIMACIONES ─────────────────────────────────────────────── */
 @keyframes pulse {
   0%, 100% { opacity: 1; }
