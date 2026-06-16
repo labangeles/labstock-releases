@@ -283,15 +283,17 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
     {id:'inventario', label:'Inventario', Icon:Ico.Box},
   ] : [];
 
-  const navAdmin = isAdmin ? [
-    {id:'usuarios',    label:'Usuarios',            Icon:Ico.Users},
+  const navFinanzas = isAdmin ? [
     {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
     {id:'analisis',    label:'Análisis Financiero', Icon:Ico.TrendingUp},
   ] : isAuditor ? [
     {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
   ] : [];
 
-  const navRRHH = [{id:'rrhh', label:'Recursos Humanos', Icon:Ico.Users}];
+  const navRRHH = [
+    {id:'rrhh', label:'Recursos Humanos', Icon:Ico.Users},
+    ...(isAdmin ? [{id:'usuarios', label:'Usuarios', Icon:Ico.Lock}] : []),
+  ];
 
   const navCaja = cajaPerm ? [
     ...(!isAuditor ? [{id:'caja_dia', label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
@@ -360,16 +362,16 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
             ))}
           </>
         )}
-        {navAdmin.length>0 && (
+        {navFinanzas.length>0 && (
           <>
-            <SectionLabel label="Administración"/>
-            {navAdmin.map(({id,label,Icon,badge})=>(
+            <SectionLabel label="Finanzas"/>
+            {navFinanzas.map(({id,label,Icon,badge})=>(
               <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
                 active={view===id} onNav={onNav}/>
             ))}
           </>
         )}
-        <SectionLabel label="RRHH"/>
+        <SectionLabel label="Recursos Humanos"/>
         {navRRHH.map(({id,label,Icon})=>(
           <NavBtn key={id} id={id} label={label} Icon={Icon} badge={0}
             active={view===id} onNav={onNav}/>
