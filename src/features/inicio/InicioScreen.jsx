@@ -85,13 +85,12 @@ function BadgeReconocimiento({ asunto }) {
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       <div style={{
         width: 36, height: 36, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.18)',
         border: '2px solid rgba(255,255,255,0.35)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 17, cursor: 'default', userSelect: 'none',
-        transition: 'transform 0.13s, background 0.13s',
         transform: hov ? 'scale(1.18)' : 'scale(1)',
         background: hov ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.18)',
+        transition: 'transform 0.13s, background 0.13s',
       }}>
         {r.icono}
       </div>
