@@ -13,6 +13,8 @@ import { GastosFijosScreen } from "./features/admin/GastosFijosScreen";
 import { AnalisisFinancieroScreen } from "./features/admin/AnalisisFinancieroScreen";
 import { InicioScreen } from "./features/inicio/InicioScreen";
 import { RRHHScreen }   from "./features/rrhh/RRHHScreen";
+import ChatInterno     from "./features/chat/ChatInterno";
+import AgenteIA       from "./features/agente/AgenteIA";
 import { VentasScreen } from "./features/ventas/VentasScreen";
 
 /* ── DATOS ───────────────────────────────────────────────── */
@@ -1401,13 +1403,15 @@ function UsuariosScreen({sedes}) {
                 {u.activo&&(
                   <IconBtn icon={<Ico.Edit s={13}/>} onClick={()=>openEdit(u)} title="Editar rol y permisos"/>
                 )}
-                {u.activo && u.machine_id && (
-                  <IconBtn icon={<Ico.Unlock s={13}/>} title="Resetear dispositivo vinculado"
+                {u.activo && (u.machine_ids?.length > 0 || u.machine_id) && (
+                  <IconBtn icon={<Ico.Unlock s={13}/>}
+                    title={`Resetear dispositivos (${u.machine_ids?.length || 1} registrado${(u.machine_ids?.length||1)>1?'s':''})`}
                     onClick={async()=>{
-                      if(!window.confirm(`¿Resetear el dispositivo de ${u.nombre}? Podrá iniciar sesión desde cualquier PC una vez.`)) return;
+                      const n = u.machine_ids?.length || 1;
+                      if(!window.confirm(`¿Resetear ${n} dispositivo(s) de ${u.nombre}?\nPodrá registrar nuevos equipos al próximo inicio de sesión.`)) return;
                       const r = await window.electronAPI?.resetMachineId(u.id);
                       if(r?.error){ showToast('❌ '+r.error); return; }
-                      load(); showToast('✅ Dispositivo reseteado — el usuario podrá registrar un nuevo equipo');
+                      load(); showToast('✅ Dispositivos reseteados');
                     }}/>
                 )}
                 {u.activo&&(
@@ -2158,6 +2162,45 @@ function DispositivoBloqueadoScreen({ onSignOut }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PANTALLA: SESIÓN CERRADA POR OTRO DISPOSITIVO (admin)
+═══════════════════════════════════════════════════════════ */
+function SesionCerradaScreen({ onOk }) {
+  return (
+    <div style={{minHeight:'100vh',background:T.canvas,display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',padding:24}}>
+      <div style={{background:T.surface,borderRadius:16,padding:'40px 36px',width:'100%',maxWidth:400,
+        boxShadow:'0 20px 60px rgba(0,0,0,0.18)',border:`1px solid ${T.warn}44`,textAlign:'center'}}>
+        <div style={{width:60,height:60,borderRadius:'50%',background:`${T.warn}22`,
+          display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px'}}>
+          <Ico.Unlock s={28} c={T.warn}/>
+        </div>
+        <div style={{fontSize:18,fontWeight:700,color:T.hi,marginBottom:8}}>
+          Sesión cerrada
+        </div>
+        <div style={{fontSize:13,color:T.mid,lineHeight:1.6,marginBottom:24}}>
+          Tu sesión fue cerrada porque iniciaste en otro dispositivo.<br/>
+          Solo puede haber una sesión activa a la vez.
+        </div>
+        <button onClick={onOk}
+          style={{width:'100%',padding:'10px 16px',background:`${T.warn}22`,color:T.warn,
+            border:`1px solid ${T.warn}44`,borderRadius:8,fontFamily:'inherit',
+            fontSize:13,fontWeight:600,cursor:'pointer'}}>
+          Iniciar sesión
+        </button>
+        <div style={{marginTop:20,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke={T.tealDk} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+          </svg>
+          <span style={{fontSize:11,color:T.lo}}>Desarrollado por </span>
+          <span style={{fontSize:11,fontWeight:800,color:T.tealDk}}>TELOXIS</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
    PANTALLA: LOGIN
 ═══════════════════════════════════════════════════════════ */
 const DOMAIN = '@labstock.gt';
@@ -2298,6 +2341,8 @@ export default function App() {
   const [selectedSede,setSede]     = useState(null);
   const [pedidosBadge,setPedBadge] = useState(0);
   const [machineBlocked,setMachineBlocked] = useState(false);
+  const [kickedOut,    setKickedOut]     = useState(false);
+  const [sessionToken, setSessionToken]  = useState(null);
 
   const isAdmin      = profile?.rol==='admin';
   const isAuditor    = profile?.rol==='auditor';
@@ -2308,25 +2353,70 @@ export default function App() {
   const currentSedeId = isAdmin ? selectedSede : profile?.sede_id;
   const currentSedeName = sedes.find(s=>s.id===currentSedeId)?.nombre || (isAdmin&&!currentSedeId?null:profile?.sedes?.nombre);
 
-  // ── Binding de máquina ──────────────────────────────────
+  // ── Binding de máquina / sesión única admin ──────────────────────────────────
   useEffect(() => {
     if (!profile || !window.electronAPI?.getMachineId) return;
-    if (profile.rol === 'admin' || profile.rol === 'auditor') return; // exentos
     let cancelled = false;
     (async () => {
       const machineId = await window.electronAPI.getMachineId();
       if (!machineId || cancelled) return;
-      if (!profile.machine_id) {
-        // Primer login en este dispositivo — registrar
-        await supabase.from('profiles').update({ machine_id: machineId }).eq('id', profile.id);
-      } else if (profile.machine_id !== machineId) {
-        // Dispositivo diferente al registrado — bloquear
-        await signOut();
-        if (!cancelled) setMachineBlocked(true);
+
+      if (profile.rol === 'admin' || profile.rol === 'auditor') {
+        // Admin/Auditor: sesión única — registrar token para detectar inicio en otro equipo
+        let tok = sessionStorage.getItem('sl_stok');
+        if (!tok) {
+          tok = crypto.randomUUID();
+          sessionStorage.setItem('sl_stok', tok);
+          await supabase.from('profiles').update({ session_token: tok }).eq('id', profile.id);
+        }
+        if (!cancelled) setSessionToken(tok);
+        return;
       }
+
+      // Usuarios no-admin: binding por lista de dispositivos permitidos según sede
+      const machineIds = profile.machine_ids || [];
+      const userSede   = sedes.find(s => s.id === profile.sede_id);
+      const maxDisp    = userSede?.max_dispositivos ?? 1;
+
+      if (machineIds.includes(machineId)) return; // ya registrado → permitir
+
+      if (machineIds.length < maxDisp) {
+        // Cupo disponible → registrar este dispositivo
+        await supabase.from('profiles').update({
+          machine_id:  machineIds[0] || machineId,
+          machine_ids: [...machineIds, machineId],
+        }).eq('id', profile.id);
+        return;
+      }
+
+      // Sin cupo → bloquear
+      await signOut();
+      if (!cancelled) setMachineBlocked(true);
     })();
     return () => { cancelled = true; };
   }, [profile?.id]);
+
+  // ── Admin: suscripción Realtime para detectar sesión abierta en otro equipo ──
+  useEffect(() => {
+    if (!sessionToken || !profile?.id ||
+        (profile.rol !== 'admin' && profile.rol !== 'auditor')) return;
+
+    const ch = supabase.channel('sl_session_guard_' + profile.id)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'profiles',
+        filter: `id=eq.${profile.id}`,
+      }, ({ new: row }) => {
+        const storedTok = sessionStorage.getItem('sl_stok');
+        if (row.session_token && storedTok && row.session_token !== storedTok) {
+          sessionStorage.removeItem('sl_stok');
+          signOut();
+          setKickedOut(true);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(ch); };
+  }, [sessionToken, profile?.id]);
 
   // Resetear a inicio en cada nuevo login
   const prevProfileId = useRef(null);
@@ -2546,6 +2636,7 @@ export default function App() {
   );
 
   if(machineBlocked) return <DispositivoBloqueadoScreen onSignOut={()=>setMachineBlocked(false)}/>;
+  if(kickedOut) return <SesionCerradaScreen onOk={()=>setKickedOut(false)}/>;
   if(!session||!profile) return <LoginScreen/>;
 
   return (
@@ -2658,6 +2749,8 @@ export default function App() {
         <CartModal items={items} sedes={sedes} currentSedeId={currentSedeId}
           onSubmit={handleCreateOrder} onClose={close}/>
       </Modal>
+      <AgenteIA profile={profile}/>
+      <ChatInterno profile={profile}/>
     </div>
   );
 }

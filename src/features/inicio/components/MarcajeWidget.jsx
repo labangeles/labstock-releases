@@ -88,7 +88,7 @@ const ACCION_ICO = {
 const HORARIO_DEF = {
   hora_entrada: '07:00', hora_salida: '17:00',
   tiene_desayuno: false,
-  duracion_desayuno_min: 15, duracion_comida_min: 60,
+  duracion_desayuno_min: 20, duracion_comida_min: 60,
   tolerancia_min: 2, dias_laborales: [1, 2, 3, 4, 5],
 };
 
@@ -101,6 +101,16 @@ function hhmm(dateStr) {
 
 function getPasos(horario) {
   return TODOS_PASOS.filter(p => !p.esDesayuno || horario?.tiene_desayuno);
+}
+
+function getHorarioDelDia(horario, dia) {
+  const ov = horario?.horarios_especiales?.[String(dia)];
+  if (!ov) return horario;
+  return {
+    ...horario,
+    hora_entrada: ov.hora_entrada || horario.hora_entrada,
+    hora_salida:  ov.hora_salida  || horario.hora_salida,
+  };
 }
 
 function getNextTipo(marcajes, horario) {
@@ -216,15 +226,17 @@ export function MarcajeWidget({ profile }) {
   );
 
   const hor          = horario || HORARIO_DEF;
-  const esDiaLaboral = hor.dias_laborales.includes(jsDiaAdb(new Date().getDay()));
-  const pasos        = getPasos(hor);
-  const nextTipo     = getNextTipo(marcajes, hor);
+  const diaActual    = jsDiaAdb(new Date().getDay());
+  const horHoy       = getHorarioDelDia(hor, diaActual);
+  const esDiaLaboral = hor.dias_laborales.includes(diaActual);
+  const pasos        = getPasos(horHoy);
+  const nextTipo     = getNextTipo(marcajes, horHoy);
 
   const marcar = async () => {
     if (!nextTipo || !empleado || marcando) return;
     setMarcando(true); setMsg(null);
     try {
-      const tard = calcTardanza(nextTipo, hor, marcajes);
+      const tard = calcTardanza(nextTipo, horHoy, marcajes);
       const { error } = await supabase.from('asistencia_marcajes').insert({
         empleado_id: empleado.id, organizacion_id: empleado.organizacion_id,
         sede_id: empleado.sede_id, tipo: nextTipo, ...tard,
@@ -245,6 +257,21 @@ export function MarcajeWidget({ profile }) {
   });
 
   const AccionIco = nextTipo ? ACCION_ICO[nextTipo] : null;
+
+  // ── Countdown de descanso ────────────────────────────────
+  const breakTipo    = nextTipo === 'fin_desayuno' ? 'inicio_desayuno'
+                     : nextTipo === 'fin_comida'   ? 'inicio_comida'
+                     : null;
+  const breakMarcaje = breakTipo ? marcajes.find(m => m.tipo === breakTipo) : null;
+  const breakDurMin  = nextTipo === 'fin_desayuno' ? (horHoy.duracion_desayuno_min ?? 20)
+                     : nextTipo === 'fin_comida'   ? (horHoy.duracion_comida_min  ?? 60)
+                     : 0;
+  const breakLabel   = nextTipo === 'fin_desayuno' ? 'Desayuno' : 'Almuerzo';
+  let cntSecs = null;
+  if (breakMarcaje) {
+    const deadline = new Date(breakMarcaje.marcado_en).getTime() + breakDurMin * 60 * 1000;
+    cntSecs = Math.round((deadline - ahora.getTime()) / 1000);
+  }
 
   return (
     <div style={{
@@ -311,6 +338,35 @@ export function MarcajeWidget({ profile }) {
 
       {/* Separador */}
       <div style={{ borderTop: `1px solid ${T.border}`, marginBottom: 16 }} />
+
+      {/* Countdown de descanso */}
+      {cntSecs !== null && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: T.critBg,
+          border: `1px solid ${T.crit}33`,
+          borderRadius: 10, padding: '10px 16px', marginBottom: 14,
+        }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+            stroke={T.crit} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12,6 12,12 16,14"/>
+          </svg>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: T.crit,
+              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
+              {breakLabel} · {cntSecs > 0 ? 'tiempo restante' : '¡tiempo excedido!'}
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: T.crit,
+              fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+              {cntSecs > 0
+                ? `${String(Math.floor(cntSecs / 60)).padStart(2, '0')}:${String(cntSecs % 60).padStart(2, '0')}`
+                : `+${String(Math.floor(-cntSecs / 60)).padStart(2, '0')}:${String((-cntSecs) % 60).padStart(2, '0')}`
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Zona de acción */}
       {!esDiaLaboral ? (

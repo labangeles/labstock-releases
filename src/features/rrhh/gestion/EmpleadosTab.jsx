@@ -8,6 +8,20 @@ import { RECONOCIMIENTOS } from '../../../components/Reconocimientos';
 
 const SEL = { value: '', label: 'Sin cargo' };
 
+const HOR_DEF = {
+  hora_entrada: '07:00', hora_salida: '17:00',
+  tiene_desayuno: false,
+  duracion_desayuno_min: 20, duracion_comida_min: 60,
+  tolerancia_min: 2, dias_laborales: [1, 2, 3, 4, 5],
+};
+
+const DIAS_SEM = [
+  { num: 1, label: 'L' }, { num: 2, label: 'M' }, { num: 3, label: 'X' },
+  { num: 4, label: 'J' }, { num: 5, label: 'V' }, { num: 6, label: 'S' },
+  { num: 7, label: 'D' },
+];
+const DIAS_NOMBRE = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' };
+
 const HOY = new Date().toISOString().split('T')[0];
 const MES_DESDE = (() => {
   const d = new Date();
@@ -28,12 +42,13 @@ export default function EmpleadosTab() {
   const [msg,            setMsg]            = useState(null);
   const [empRecons,      setEmpRecons]      = useState(new Set());
   const [togglingRecon,  setTogglingRecon]  = useState(null);
+  const [horarioEd,      setHorarioEd]      = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
     const [e, c, p] = await Promise.all([
       supabase.from('empleados')
-        .select('*, cargos(id, nombre), sedes(nombre)')
+        .select('*, cargos(id, nombre), sedes(nombre), organizacion_id')
         .eq('organizacion_id', profile.organizacion_id)
         .order('apellido'),
       supabase.from('cargos')
@@ -81,20 +96,53 @@ export default function EmpleadosTab() {
     setEdits({ cargo_id: emp.cargo_id || '', fecha_ingreso: emp.fecha_ingreso || '', profile_id: emp.profile_id || '' });
     setMsg(null);
     setEmpRecons(new Set());
-    await cargarEmpRecons(emp.id);
+    const [, { data: hor }] = await Promise.all([
+      cargarEmpRecons(emp.id),
+      supabase.from('horarios_empleados').select('*').eq('empleado_id', emp.id).maybeSingle(),
+    ]);
+    setHorarioEd(hor ? { ...hor } : { ...HOR_DEF });
   };
 
-  const cancelar = () => { setEditando(null); setEdits({}); setEmpRecons(new Set()); };
+  const cancelar = () => { setEditando(null); setEdits({}); setEmpRecons(new Set()); setHorarioEd(null); };
+
+  const setHor = (key, val) => setHorarioEd(h => ({ ...h, [key]: val }));
+  const toggleDia = (num) => setHorarioEd(h => {
+    const dias = h.dias_laborales || [];
+    const nuevos = dias.includes(num) ? dias.filter(d => d !== num) : [...dias, num].sort((a, b) => a - b);
+    // Limpiar overrides de días que ya no son laborales
+    const esp = { ...(h.horarios_especiales || {}) };
+    if (!nuevos.includes(num)) delete esp[String(num)];
+    return { ...h, dias_laborales: nuevos, horarios_especiales: esp };
+  });
+  const setEspecial = (diaNum, field, val) => setHorarioEd(h => {
+    const esp = { ...(h.horarios_especiales || {}) };
+    esp[String(diaNum)] = { ...(esp[String(diaNum)] || {}), [field]: val };
+    if (!esp[String(diaNum)].hora_entrada && !esp[String(diaNum)].hora_salida)
+      delete esp[String(diaNum)];
+    return { ...h, horarios_especiales: esp };
+  });
+  const clearEspecial = (diaNum) => setHorarioEd(h => {
+    const esp = { ...(h.horarios_especiales || {}) };
+    delete esp[String(diaNum)];
+    return { ...h, horarios_especiales: esp };
+  });
 
   const guardar = async (emp) => {
     setGuardando(true); setMsg(null);
-    const { error } = await supabase.from('empleados').update({
-      cargo_id:      edits.cargo_id     || null,
-      fecha_ingreso: edits.fecha_ingreso || null,
-      profile_id:    edits.profile_id   || null,
-    }).eq('id', emp.id);
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabase.from('empleados').update({
+        cargo_id:      edits.cargo_id     || null,
+        fecha_ingreso: edits.fecha_ingreso || null,
+        profile_id:    edits.profile_id   || null,
+      }).eq('id', emp.id),
+      supabase.from('horarios_empleados').upsert(
+        { empleado_id: emp.id, organizacion_id: emp.organizacion_id, ...horarioEd },
+        { onConflict: 'empleado_id' },
+      ),
+    ]);
+    const error = e1 || e2;
     if (error) setMsg({ id: emp.id, txt: error.message });
-    else { setEditando(null); setEdits({}); setEmpRecons(new Set()); cargar(); }
+    else { setEditando(null); setEdits({}); setHorarioEd(null); setEmpRecons(new Set()); cargar(); }
     setGuardando(false);
   };
 
@@ -186,7 +234,7 @@ export default function EmpleadosTab() {
                           ● {profiles.find(p => p.id === emp.profile_id)?.nombre || 'Usuario vinculado'}
                         </span>
                       ) : (
-                        <span style={{ color: '#D97706', marginLeft: 8, fontSize: 12 }}>⚠ Sin usuario vinculado</span>
+                        <span style={{ color: T.warn, marginLeft: 8, fontSize: 12 }}>⚠ Sin usuario vinculado</span>
                       )}
                     </div>
                   )}
@@ -251,6 +299,111 @@ export default function EmpleadosTab() {
                       <div style={{ color: T.crit, fontSize: 13, gridColumn: '1 / -1' }}>{msg.txt}</div>
                     )}
                   </div>
+
+                  {/* Horario de trabajo */}
+                  {horarioEd && (
+                    <div style={{ marginTop: 18, borderTop: `1px dashed ${T.border}`, paddingTop: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: T.lo,
+                        letterSpacing: '0.09em', textTransform: 'uppercase', marginBottom: 12 }}>
+                        Horario de trabajo
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                        <Field label="Hora entrada">
+                          <TInput type="time" value={horarioEd.hora_entrada}
+                            onChange={e => setHor('hora_entrada', e?.target ? e.target.value : e)} />
+                        </Field>
+                        <Field label="Hora salida">
+                          <TInput type="time" value={horarioEd.hora_salida}
+                            onChange={e => setHor('hora_salida', e?.target ? e.target.value : e)} />
+                        </Field>
+                        <Field label="Tolerancia tardanza (min)">
+                          <TInput type="number" min="0" max="30" value={horarioEd.tolerancia_min}
+                            onChange={e => setHor('tolerancia_min', Number(e?.target ? e.target.value : e))} />
+                        </Field>
+                        <Field label="Duración almuerzo (min)">
+                          <TInput type="number" min="15" max="120" value={horarioEd.duracion_comida_min}
+                            onChange={e => setHor('duracion_comida_min', Number(e?.target ? e.target.value : e))} />
+                        </Field>
+                      </div>
+                      {/* Desayuno */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: T.mid }}>
+                          <input type="checkbox" checked={!!horarioEd.tiene_desayuno}
+                            onChange={e => setHor('tiene_desayuno', e.target.checked)}
+                            style={{ width: 15, height: 15, accentColor: 'var(--teal)', cursor: 'pointer' }} />
+                          Tiene desayuno
+                        </label>
+                        {horarioEd.tiene_desayuno && (
+                          <div style={{ width: 180 }}>
+                            <Field label="Duración desayuno (min)">
+                              <TInput type="number" min="10" max="60" value={horarioEd.duracion_desayuno_min}
+                                onChange={e => setHor('duracion_desayuno_min', Number(e?.target ? e.target.value : e))} />
+                            </Field>
+                          </div>
+                        )}
+                      </div>
+                      {/* Días laborales */}
+                      <div style={{ marginTop: 12 }}>
+                        <div style={{ fontSize: 12, color: T.lo, marginBottom: 6 }}>Días laborales</div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {DIAS_SEM.map(({ num, label }) => {
+                            const activo = (horarioEd.dias_laborales || []).includes(num);
+                            return (
+                              <button key={num} onClick={() => toggleDia(num)} type="button"
+                                style={{
+                                  width: 34, height: 34, borderRadius: '50%', border: 'none',
+                                  background: activo ? 'var(--teal)' : T.canvas,
+                                  color: activo ? '#fff' : T.lo,
+                                  fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                                  outline: activo ? `2px solid var(--teal-light)` : `1px solid ${T.border}`,
+                                  transition: 'all 0.12s',
+                                }}>
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Horarios especiales por día */}
+                      {(horarioEd.dias_laborales || []).length > 0 && (
+                        <div style={{ marginTop: 14 }}>
+                          <div style={{ fontSize: 12, color: T.lo, marginBottom: 6 }}>
+                            Horario especial por día <span style={{ fontWeight: 400 }}>(dejar vacío para usar el horario general)</span>
+                          </div>
+                          <div style={{ display: 'grid', gap: 6 }}>
+                            {(horarioEd.dias_laborales || []).map(diaNum => {
+                              const ov  = (horarioEd.horarios_especiales || {})[String(diaNum)];
+                              const tienOv = !!(ov?.hora_entrada || ov?.hora_salida);
+                              return (
+                                <div key={diaNum} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: tienOv ? 'var(--teal-dark)' : T.mid, width: 82, flexShrink: 0 }}>
+                                    {DIAS_NOMBRE[diaNum]}
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <TInput type="time" value={ov?.hora_entrada ?? ''}
+                                      placeholder={horarioEd.hora_entrada}
+                                      onChange={e => setEspecial(diaNum, 'hora_entrada', e?.target ? e.target.value : e)} />
+                                    <span style={{ fontSize: 12, color: T.lo }}>–</span>
+                                    <TInput type="time" value={ov?.hora_salida ?? ''}
+                                      placeholder={horarioEd.hora_salida}
+                                      onChange={e => setEspecial(diaNum, 'hora_salida', e?.target ? e.target.value : e)} />
+                                    {tienOv && (
+                                      <button onClick={() => clearEspecial(diaNum)} type="button"
+                                        title="Quitar horario especial"
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.lo, fontSize: 16, lineHeight: 1, padding: '0 2px' }}>
+                                        ×
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Reconocimientos del mes */}
                   <div style={{ marginTop: 18, borderTop: `1px dashed ${T.border}`, paddingTop: 14 }}>

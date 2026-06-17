@@ -288,7 +288,7 @@ ipcMain.handle('reset-machine-id', async (_, userId) => {
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
-    await admin.from('profiles').update({ machine_id: null }).eq('id', userId)
+    await admin.from('profiles').update({ machine_id: null, machine_ids: [] }).eq('id', userId)
     return { success: true }
   } catch (e) {
     return { error: e.message }
