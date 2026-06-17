@@ -270,7 +270,7 @@ function LineItems({ lines, onChange, onRemove, readOnly }) {
         <div key={line._id || line.id}
           style={{ display:'grid', gridTemplateColumns:cols, padding:'10px 12px', alignItems:'center',
             gap:8, borderBottom:i < lines.length-1 ? `1px solid ${T.border}` : 'none',
-            background: line.item_id ? '#F0FAFA' : 'transparent' }}>
+            background: line.item_id ? T.tealXL : 'transparent' }}>
           <div>
             <div style={{ fontSize:13, fontWeight:500, color:T.hi }}>{line.nombre}</div>
             <div style={{ fontSize:10.5, marginTop:2 }}>

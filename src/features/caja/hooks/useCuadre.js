@@ -81,10 +81,23 @@ export function useCuadre(sedeId, profile) {
 
     let cuadreDelDia = existing;
 
+    // Siempre consultar el último cuadre cerrado anterior para fecha (display) y diferencia.
+    // Debe hacerse ANTES de crear el cuadre nuevo para poder persistir sobrante_anterior.
+    const { data: anterior } = await supabase
+      .from('v_cuadres_resumen').select('fecha, diferencia')
+      .eq('sede_id', sedeId).eq('estado', 'cerrado').lt('fecha', today)
+      .order('fecha', { ascending: false }).limit(1).maybeSingle();
+
     if (!cuadreDelDia) {
+      // Persistir sobrante_anterior al momento de apertura para que la cadena
+      // de acumulación nunca se pierda aunque haya días consecutivos sin depósito.
+      const sobranteAntMonto = anterior && Number(anterior.diferencia) > 0
+        ? Number(anterior.diferencia) : 0;
+
       const { data: created, error: insertErr } = await supabase
         .from('cuadres_caja')
-        .insert({ sede_id: sedeId, fecha: today, creado_por: profile.id, caja_base: 800 })
+        .insert({ sede_id: sedeId, fecha: today, creado_por: profile.id,
+                  caja_base: 800, sobrante_anterior: sobranteAntMonto })
         .select().single();
       if (insertErr) {
         setRlsError('Sin permiso para crear el cuadre. Contacta al administrador.');
@@ -99,14 +112,11 @@ export function useCuadre(sedeId, profile) {
 
     setCuadre(cuadreDelDia);
 
-    // Sobrante del día anterior
-    const { data: anterior } = await supabase
-      .from('v_cuadres_resumen').select('fecha, diferencia')
-      .eq('sede_id', sedeId).eq('estado', 'cerrado').lt('fecha', today)
-      .order('fecha', { ascending: false }).limit(1).maybeSingle();
-
-    setSobrante(anterior && Number(anterior.diferencia) > 0
-      ? { fecha: anterior.fecha, monto: Number(anterior.diferencia) }
+    // Usar sobrante_anterior del registro persistido (no diferencia de la vista).
+    // La vista solo conoce el día actual; el campo persistido acumula días sin depósito.
+    const sobrantePersistido = Number(cuadreDelDia?.sobrante_anterior ?? 0);
+    setSobrante(sobrantePersistido > 0
+      ? { fecha: anterior?.fecha ?? null, monto: sobrantePersistido }
       : null);
 
     let gData = [], dData = [];

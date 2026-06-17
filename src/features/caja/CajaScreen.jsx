@@ -109,7 +109,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
         </div>
       )}
 
-      {soranteAnterior && isOpen && (
+      {soranteAnterior && isOpen && diferencia !== 0 && (
         <div style={{ background:'rgba(234,179,8,0.1)', border:`1px solid ${T.warn}55`,
           borderRadius:10, padding:'10px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
           <Ico.Warn s={16} c={T.warn} style={{flexShrink:0,marginTop:1}}/>
@@ -118,8 +118,11 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
               Sobrante del día anterior: {fmtQ(soranteAnterior.monto)}
             </div>
             <div style={{ fontSize:12, color:T.mid }}>
-              El cuadre del {new Date(soranteAnterior.fecha + 'T12:00:00').toLocaleDateString('es-GT',
-                { weekday:'long', day:'2-digit', month:'long' })} cerró con efectivo extra en caja.
+              {soranteAnterior.fecha
+                ? <>El cuadre del {new Date(soranteAnterior.fecha + 'T12:00:00').toLocaleDateString('es-GT',
+                    { weekday:'long', day:'2-digit', month:'long' })} cerró con efectivo extra en caja. </>
+                : <>Hay efectivo acumulado de días anteriores en caja. </>
+              }
               Verifica que el efectivo físico coincide con la caja base actual (Q800).
             </div>
           </div>
