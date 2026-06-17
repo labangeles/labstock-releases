@@ -27,8 +27,16 @@ async function subirArchivo(bucket, path, file, { upsert = false } = {}) {
 // Foto de perfil — rrhh-fotos/empleados/{id}/foto.{ext}
 export async function subirFoto(empleadoId, file) {
   if (file.size > 2 * 1024 * 1024) throw new Error('La foto no debe superar 2 MB.');
-  const path = `empleados/${empleadoId}/foto.${extDe(file)}`;
-  await subirArchivo('rrhh-fotos', path, file, { upsert: true });
+  const ext = extDe(file);
+  const path = `empleados/${empleadoId}/foto.${ext}`;
+  // Borra cualquier versión previa (evita necesitar política UPDATE en storage)
+  await supabase.storage.from('rrhh-fotos').remove([
+    `empleados/${empleadoId}/foto.jpg`,
+    `empleados/${empleadoId}/foto.jpeg`,
+    `empleados/${empleadoId}/foto.png`,
+    `empleados/${empleadoId}/foto.webp`,
+  ]);
+  await subirArchivo('rrhh-fotos', path, file, { upsert: false });
   return path;
 }
 
