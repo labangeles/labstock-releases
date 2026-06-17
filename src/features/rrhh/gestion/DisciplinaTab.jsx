@@ -10,7 +10,6 @@ const TIPO_OPC = [SEL,
   { value: 'llamada_atencion',     label: 'Llamada de atención' },
   { value: 'amonestacion_escrita', label: 'Amonestación escrita' },
   { value: 'suspension',           label: 'Suspensión' },
-  { value: 'reconocimiento',       label: 'Reconocimiento' },
 ];
 
 const GRAVEDAD_OPC = [
@@ -19,28 +18,12 @@ const GRAVEDAD_OPC = [
   { value: 'muy_grave', label: 'Muy grave' },
 ];
 
-const RECONOCIMIENTOS = [
-  { icono: '⭐', titulo: 'Empleado del mes',           desc: 'Reconocimiento mensual al colaborador más destacado.' },
-  { icono: '⏰', titulo: 'Puntualidad sobresaliente',  desc: 'Cumplimiento ejemplar de horarios de entrada y salida.' },
-  { icono: '🏆', titulo: 'Desempeño excepcional',      desc: 'Resultados que superan significativamente las expectativas del puesto.' },
-  { icono: '🤝', titulo: 'Espíritu de equipo',         desc: 'Apoyo constante a compañeros y contribución al ambiente de trabajo positivo.' },
-  { icono: '🔬', titulo: 'Calidad en resultados',      desc: 'Precisión y cuidado en el procesamiento y reporte de muestras.' },
-  { icono: '💡', titulo: 'Iniciativa y proactividad',  desc: 'Identificación y resolución de problemas sin necesidad de ser indicado.' },
-  { icono: '📅', titulo: 'Años de servicio',           desc: 'Reconocimiento por la trayectoria y fidelidad con la organización.' },
-  { icono: '😊', titulo: 'Atención al paciente',       desc: 'Trato amable, empático y profesional hacia los pacientes.' },
-  { icono: '📈', titulo: 'Superación de metas',        desc: 'Logro o superación de los objetivos establecidos para el período.' },
-  { icono: '🌟', titulo: 'Actitud positiva',           desc: 'Disposición y energía que inspiran a los demás en el equipo.' },
-  { icono: '🛡️', titulo: 'Compromiso con la calidad', desc: 'Adherencia estricta a protocolos y buenas prácticas de laboratorio.' },
-  { icono: '🚀', titulo: 'Innovación y mejora',        desc: 'Propuesta o implementación de mejoras en procesos internos.' },
-];
-
 const FORM_INIT = { empleado_id: '', tipo: '', gravedad: 'leve', fecha: '', asunto: '', descripcion: '' };
 
 const TIPO_LABEL = {
   llamada_atencion:    { txt: 'Llamada de atención',  c: T.warn, bg: T.warnBg },
   amonestacion_escrita:{ txt: 'Amonestación escrita', c: T.crit, bg: T.critBg },
   suspension:          { txt: 'Suspensión',           c: T.crit, bg: T.critBg },
-  reconocimiento:      { txt: 'Reconocimiento',       c: T.ok,   bg: T.okBg   },
 };
 
 export default function DisciplinaTab() {
@@ -114,52 +97,16 @@ export default function DisciplinaTab() {
           <Field label="Tipo">
             <TSelect value={form.tipo} onChange={set('tipo')} options={TIPO_OPC} />
           </Field>
-          {form.tipo !== 'reconocimiento' && (
-            <Field label="Gravedad">
-              <TSelect value={form.gravedad} onChange={set('gravedad')} options={GRAVEDAD_OPC} />
-            </Field>
-          )}
+          <Field label="Gravedad">
+            <TSelect value={form.gravedad} onChange={set('gravedad')} options={GRAVEDAD_OPC} />
+          </Field>
           <Field label="Fecha">
             <TInput type="date" value={form.fecha} onChange={set('fecha')} />
           </Field>
 
-          {/* Paleta de reconocimientos predefinidos */}
-          {form.tipo === 'reconocimiento' && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: T.lo, marginBottom: 10 }}>
-                Tipo de reconocimiento — selecciona uno o escribe el tuyo
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8, marginBottom: 10 }}>
-                {RECONOCIMIENTOS.map((r) => {
-                  const sel = form.asunto === r.titulo;
-                  return (
-                    <button key={r.titulo} type="button"
-                      onClick={() => setForm((f) => ({ ...f, asunto: r.titulo, descripcion: f.descripcion || r.desc }))}
-                      style={{
-                        textAlign: 'left', cursor: 'pointer',
-                        background: sel ? T.tealXL : T.canvas,
-                        border: `1.5px solid ${sel ? T.teal : T.border}`,
-                        borderRadius: 10, padding: '10px 12px',
-                        transition: 'all 0.13s',
-                        outline: 'none',
-                      }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <span style={{ fontSize: 18, lineHeight: 1 }}>{r.icono}</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: sel ? T.tealDk : T.hi }}>
-                          {r.titulo}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 11.5, color: T.lo, lineHeight: 1.4 }}>{r.desc}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <Field label="Asunto" style={{ gridColumn: '1 / -1' }}>
             <TInput value={form.asunto} onChange={set('asunto')}
-              placeholder={form.tipo === 'reconocimiento' ? 'Selecciona arriba o escribe un asunto personalizado…' : 'Ej. Llegada tarde reiterada'} />
+              placeholder="Ej. Llegada tarde reiterada" />
           </Field>
           <Field label="Descripción (opcional)" style={{ gridColumn: '1 / -1' }}>
             <TInput value={form.descripcion} onChange={set('descripcion')}

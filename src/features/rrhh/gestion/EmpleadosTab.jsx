@@ -9,17 +9,18 @@ const SEL = { value: '', label: 'Sin cargo' };
 export default function EmpleadosTab() {
   const { profile } = useAuth();
   const [empleados, setEmpleados] = useState([]);
-  const [cargos, setCargos] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busqueda, setBusqueda] = useState('');
-  const [editando, setEditando] = useState(null); // id del empleado en edición
-  const [edits, setEdits] = useState({});          // { cargo_id, fecha_ingreso }
+  const [cargos,    setCargos]    = useState([]);
+  const [profiles,  setProfiles]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [busqueda,  setBusqueda]  = useState('');
+  const [editando,  setEditando]  = useState(null);
+  const [edits,     setEdits]     = useState({});
   const [guardando, setGuardando] = useState(false);
-  const [msg, setMsg] = useState(null);
+  const [msg,       setMsg]       = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
-    const [e, c] = await Promise.all([
+    const [e, c, p] = await Promise.all([
       supabase.from('empleados')
         .select('*, cargos(id, nombre), sedes(nombre)')
         .eq('organizacion_id', profile.organizacion_id)
@@ -29,9 +30,15 @@ export default function EmpleadosTab() {
         .eq('organizacion_id', profile.organizacion_id)
         .eq('activo', true)
         .order('nombre'),
+      supabase.from('profiles')
+        .select('id, nombre, codigo, rol')
+        .eq('organizacion_id', profile.organizacion_id)
+        .eq('activo', true)
+        .order('nombre'),
     ]);
     setEmpleados(e.data || []);
     setCargos(c.data || []);
+    setProfiles(p.data || []);
     setLoading(false);
   }, [profile]);
 
@@ -41,7 +48,7 @@ export default function EmpleadosTab() {
 
   const iniciarEdit = (emp) => {
     setEditando(emp.id);
-    setEdits({ cargo_id: emp.cargo_id || '', fecha_ingreso: emp.fecha_ingreso || '' });
+    setEdits({ cargo_id: emp.cargo_id || '', fecha_ingreso: emp.fecha_ingreso || '', profile_id: emp.profile_id || '' });
     setMsg(null);
   };
 
@@ -50,8 +57,9 @@ export default function EmpleadosTab() {
   const guardar = async (emp) => {
     setGuardando(true); setMsg(null);
     const { error } = await supabase.from('empleados').update({
-      cargo_id: edits.cargo_id || null,
+      cargo_id:     edits.cargo_id     || null,
       fecha_ingreso: edits.fecha_ingreso || null,
+      profile_id:   edits.profile_id   || null,
     }).eq('id', emp.id);
     if (error) setMsg({ id: emp.id, txt: error.message });
     else { setEditando(null); setEdits({}); cargar(); }
@@ -111,6 +119,13 @@ export default function EmpleadosTab() {
                       {emp.fecha_ingreso && (
                         <span style={{ color: T.lo }}> · Ingreso: {emp.fecha_ingreso}</span>
                       )}
+                      {emp.profile_id ? (
+                        <span style={{ color: T.tealDk, marginLeft: 8, fontSize: 12 }}>
+                          ● {profiles.find(p => p.id === emp.profile_id)?.nombre || 'Usuario vinculado'}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#D97706', marginLeft: 8, fontSize: 12 }}>⚠ Sin usuario vinculado</span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -149,6 +164,19 @@ export default function EmpleadosTab() {
                       type="date"
                       value={edits.fecha_ingreso}
                       onChange={(e) => setEdits((d) => ({ ...d, fecha_ingreso: e?.target ? e.target.value : e }))}
+                    />
+                  </Field>
+                  <Field label="Usuario vinculado" hint="Para activar marcaje de asistencia">
+                    <TSelect
+                      value={edits.profile_id}
+                      onChange={(e) => setEdits((d) => ({ ...d, profile_id: e?.target ? e.target.value : e }))}
+                      options={[
+                        { value: '', label: '— Sin vincular —' },
+                        ...profiles.map(p => ({
+                          value: p.id,
+                          label: `${p.nombre} (${p.codigo} · ${p.rol})`,
+                        })),
+                      ]}
                     />
                   </Field>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: 1 }}>

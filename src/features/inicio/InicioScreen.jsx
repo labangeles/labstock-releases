@@ -5,6 +5,8 @@ import { urlFirmada } from '../rrhh/lib/storage';
 import { AlertasRRHH }       from './components/AlertasRRHH';
 import { PromocionesSection } from './components/PromocionesSection';
 import { MarcajeWidget }     from './components/MarcajeWidget';
+import Emblem from '../../components/Emblem';
+import { RECONOCIMIENTOS } from '../../components/Reconocimientos';
 
 /* ── Frases inspiradoras (rotan por día del año) ─────────── */
 const FRASES = [
@@ -62,42 +64,23 @@ function AlertCard({ color, bg, icon, titulo, descripcion, accion, onClick }) {
   );
 }
 
-/* ── Mapa de reconocimientos (icono + descripción) ───────── */
-const RECON_MAP = {
-  'Empleado del mes':          { icono: '⭐', desc: 'Reconocimiento mensual al colaborador más destacado.' },
-  'Puntualidad sobresaliente': { icono: '⏰', desc: 'Cumplimiento ejemplar de horarios de entrada y salida.' },
-  'Desempeño excepcional':     { icono: '🏆', desc: 'Resultados que superan las expectativas del puesto.' },
-  'Espíritu de equipo':        { icono: '🤝', desc: 'Apoyo constante a compañeros y ambiente de trabajo positivo.' },
-  'Calidad en resultados':     { icono: '🔬', desc: 'Precisión y cuidado en el procesamiento y reporte de muestras.' },
-  'Iniciativa y proactividad': { icono: '💡', desc: 'Identificación y resolución de problemas sin necesidad de ser indicado.' },
-  'Años de servicio':          { icono: '📅', desc: 'Reconocimiento por trayectoria y fidelidad con la organización.' },
-  'Atención al paciente':      { icono: '😊', desc: 'Trato amable, empático y profesional hacia los pacientes.' },
-  'Superación de metas':       { icono: '📈', desc: 'Logro o superación de los objetivos establecidos para el período.' },
-  'Actitud positiva':          { icono: '🌟', desc: 'Disposición y energía que inspiran a los demás en el equipo.' },
-  'Compromiso con la calidad': { icono: '🛡️', desc: 'Adherencia estricta a protocolos y buenas prácticas de laboratorio.' },
-  'Innovación y mejora':       { icono: '🚀', desc: 'Propuesta o implementación de mejoras en procesos internos.' },
-};
-
 function BadgeReconocimiento({ asunto }) {
   const [hov, setHov] = useState(false);
-  const r = RECON_MAP[asunto] || { icono: '🏅', desc: asunto };
+  const cat = RECONOCIMIENTOS.find(r => r.title === asunto) || { shape:'medallion', glyph:'star', palette:'gold', desc: asunto };
   return (
     <div style={{ position: 'relative', flexShrink: 0 }}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       <div style={{
-        width: 36, height: 36, borderRadius: '50%',
-        border: '2px solid rgba(255,255,255,0.35)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 17, cursor: 'default', userSelect: 'none',
         transform: hov ? 'scale(1.18)' : 'scale(1)',
-        background: hov ? 'rgba(255,255,255,0.32)' : 'rgba(255,255,255,0.18)',
-        transition: 'transform 0.13s, background 0.13s',
+        transition: 'transform 0.13s',
+        cursor: 'default',
+        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.28))',
       }}>
-        {r.icono}
+        <Emblem shape={cat.shape} glyph={cat.glyph} palette={cat.palette} ribbon={cat.ribbon} size={46} />
       </div>
       {hov && (
         <div style={{
-          position: 'absolute', bottom: 44, left: '50%',
+          position: 'absolute', bottom: 58, left: '50%',
           transform: 'translateX(-50%)',
           background: 'rgba(15,23,32,0.94)', color: '#fff',
           borderRadius: 9, padding: '9px 13px',
@@ -107,7 +90,7 @@ function BadgeReconocimiento({ asunto }) {
           whiteSpace: 'normal',
         }}>
           <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 12.5 }}>{asunto}</div>
-          <div style={{ opacity: 0.75, fontSize: 11.5 }}>{r.desc}</div>
+          <div style={{ opacity: 0.75, fontSize: 11.5 }}>{cat.desc}</div>
           <div style={{
             position: 'absolute', bottom: -6, left: '50%',
             transform: 'translateX(-50%)',
@@ -271,7 +254,7 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
             }
           </div>
           {badges.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 150 }}>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 160, overflow: 'visible' }}>
               {badges.map((b) => <BadgeReconocimiento key={b.asunto} asunto={b.asunto} />)}
             </div>
           )}

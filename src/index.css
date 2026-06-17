@@ -98,9 +98,18 @@ body {
   color:       var(--text-hi);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* Forzar composición GPU para el layout principal */
   transform: translateZ(0);
   will-change: background-color;
+  /* Evitar selección de texto al hacer drag/scroll en Electron */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Re-habilitar selección solo donde tiene sentido */
+input, textarea, select,
+pre, code, [contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Aceleración GPU en elementos animados */

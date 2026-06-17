@@ -199,8 +199,21 @@ export function MarcajeWidget({ profile }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  if (!loading && !empleado) return null;
   if (loading) return null;
+  if (!empleado) return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+      padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.lo}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span style={{ fontSize: 12.5, color: T.lo }}>
+        Tu cuenta no está vinculada a un empleado. Pide al administrador que te registre en
+        <strong style={{ color: T.mid }}> Recursos Humanos → Empleados</strong> para activar el marcaje de asistencia.
+      </span>
+    </div>
+  );
 
   const hor          = horario || HORARIO_DEF;
   const esDiaLaboral = hor.dias_laborales.includes(jsDiaAdb(new Date().getDay()));

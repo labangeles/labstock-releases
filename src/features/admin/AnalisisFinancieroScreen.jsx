@@ -58,6 +58,14 @@ export function AnalisisFinancieroScreen({ sedes }) {
     const anioNext  = mes === 12 ? anio + 1 : anio;
     const fin       = `${anioNext}-${String(mesNext).padStart(2,'0')}-01`;
 
+    // 0. Facturación IGSS Gomera (ventas_facturas categoria=igss del período)
+    const { data: igssData } = await supabase
+      .from('ventas_facturas')
+      .select('estado, monto_total, retencion_iva, pago_esperado, fecha_pago')
+      .eq('categoria', 'igss')
+      .gte('fecha_emision', inicio)
+      .lt('fecha_emision', fin);
+
     // 1. Cuadres cerrados del período
     let q1 = supabase.from('cuadres_caja')
       .select('id, sede_id, ingreso_dia')
@@ -125,7 +133,19 @@ export function AnalisisFinancieroScreen({ sedes }) {
       }
     }
 
-    setData({ sedeMap, costoGeneral });
+    // Resumen IGSS
+    const igssRows = igssData || [];
+    const igss = {
+      totalFacturas:  igssRows.length,
+      totalBruto:     igssRows.reduce((s,r) => s + Number(r.monto_total    || 0), 0),
+      totalIVA:       igssRows.reduce((s,r) => s + Number(r.retencion_iva  || 0), 0),
+      totalDeposito:  igssRows.reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
+      depositoPagado: igssRows.filter(r => r.estado === 'pagada')
+                              .reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
+      pendientes:     igssRows.filter(r => r.estado === 'pendiente').length,
+    };
+
+    setData({ sedeMap, costoGeneral, igss });
     setLoad(false);
   }, [mes, anio, filSede, sedes]);
 
@@ -134,7 +154,9 @@ export function AnalisisFinancieroScreen({ sedes }) {
   // Totales
   const sedeRows   = data ? Object.values(data.sedeMap) : [];
   const costoGen   = data?.costoGeneral || 0;
-  const totalIng   = sedeRows.reduce((s,r) => s + r.ingresos, 0);
+  const igss       = data?.igss || { totalFacturas:0, totalBruto:0, totalIVA:0, totalDeposito:0, depositoPagado:0, pendientes:0 };
+  const totalCaja  = sedeRows.reduce((s,r) => s + r.ingresos, 0);
+  const totalIng   = totalCaja + igss.depositoPagado;  // caja + IGSS cobrado
   const totalGCaja = sedeRows.reduce((s,r) => s + r.gastosCaja, 0);
   const totalComp  = sedeRows.reduce((s,r) => s + r.compras, 0);
   const totalFijos = sedeRows.reduce((s,r) => s + r.gastosFijos, 0) + costoGen;
@@ -184,11 +206,11 @@ export function AnalisisFinancieroScreen({ sedes }) {
           {/* Tarjetas resumen */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
             <SummaryCard
-              label="Ingresos"
+              label="Ingresos totales"
               value={totalIng}
               color={T.ok}
               bg={T.okBg}
-              sub={`${cuadresSub(sedeRows)} cuadres cerrados`}
+              sub={`Caja ${fmtQ(totalCaja)} + IGSS ${fmtQ(igss.depositoPagado)}`}
             />
             <SummaryCard
               label="Gastos Variables"
@@ -317,12 +339,52 @@ export function AnalisisFinancieroScreen({ sedes }) {
             </div>
           )}
 
-          {sedeRows.length === 0 && (
+          {sedeRows.length === 0 && igss.totalFacturas === 0 && (
             <div style={{ textAlign:'center', padding:'48px 20px', background:T.surface,
               borderRadius:12, border:`1px solid ${T.border}` }}>
               <div style={{ fontSize:13.5, color:T.lo }}>Sin datos para {MESES[mes-1]} {anio}</div>
               <div style={{ fontSize:12, color:T.lo, marginTop:4 }}>
                 No hay cuadres cerrados ni compras registradas en este período.
+              </div>
+            </div>
+          )}
+
+          {/* Sección IGSS Gomera */}
+          {(igss.totalFacturas > 0 || true) && (
+            <div style={{ background:T.surface, borderRadius:12, border:`1px solid #6EE7B733`,
+              overflow:'hidden' }}>
+              <div style={{ padding:'14px 20px', borderBottom:`1px solid #6EE7B733`,
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                background:'#F0FDF4' }}>
+                <div>
+                  <span style={{ fontSize:13.5, fontWeight:700, color:'#065F46' }}>
+                    Facturación IGSS — Sede Gomera
+                  </span>
+                  <span style={{ fontSize:11.5, color:'#6EE7B7', marginLeft:10 }}>
+                    facturas emitidas en {MESES[mes-1]} {anio}
+                  </span>
+                </div>
+                <span style={{ fontSize:11.5, color:'#065F46', background:'#D1FAE5',
+                  padding:'2px 10px', borderRadius:20, fontWeight:600 }}>
+                  {igss.totalFacturas} factura(s)
+                </span>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:0 }}>
+                {[
+                  { label:'Total facturado',    value:igss.totalBruto,      color:'#065F46', note: null },
+                  { label:'IVA retenido (12%)', value:igss.totalIVA,        color:'#D97706', note:'Queda en IGSS' },
+                  { label:'Depósito esperado',  value:igss.totalDeposito,   color:T.ok,      note:`${igss.pendientes} pendiente(s)` },
+                  { label:'Ya cobrado',         value:igss.depositoPagado,  color:T.tealDk,  note:'Estado: Pagada' },
+                  { label:'Por cobrar',         value:igss.totalDeposito - igss.depositoPagado, color:'#D97706', note:'Pendiente de pago' },
+                ].map(({ label, value, color, note }, i) => (
+                  <div key={label} style={{ padding:'14px 18px',
+                    borderRight: i < 4 ? `1px solid #6EE7B733` : 'none' }}>
+                    <div style={{ fontSize:10.5, color:'#6B7280', fontWeight:700,
+                      textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:5 }}>{label}</div>
+                    <div style={{ fontSize:17, fontWeight:800, color }}>{fmtQ(value)}</div>
+                    {note && <div style={{ fontSize:10.5, color:'#9CA3AF', marginTop:3 }}>{note}</div>}
+                  </div>
+                ))}
               </div>
             </div>
           )}

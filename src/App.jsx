@@ -236,32 +236,25 @@ function TitleBar({profile, sedeName, onSignOut}) {
   );
 }
 
-function NavBtn({id,label,Icon,badge,active,onNav}) {
+function NavBtn({id,label,Icon,badge,active,onNav,indent=false}) {
   const [hov,setHov]=useState(false);
   return (
     <button onClick={()=>onNav(id)} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'9px 10px',
+      style={{width:'100%',display:'flex',alignItems:'center',gap:9,
+        padding: indent ? '8px 10px 8px 22px' : '9px 10px',
         borderRadius:8,border:'none',cursor:'pointer',marginBottom:1,position:'relative',
         background:active?T.tealXL:hov?'var(--nav-hover)':'transparent',
-        color:active?T.tealDk:hov?T.hi:T.mid,fontFamily:'inherit',fontSize:14,
+        color:active?T.tealDk:hov?T.hi:T.mid,fontFamily:'inherit',
+        fontSize: indent ? 13 : 14,
         fontWeight:active?600:400,transition:'all 0.12s',textAlign:'left'}}>
       {active&&<span style={{position:'absolute',left:0,top:'50%',transform:'translateY(-50%)',
-        width:3,height:18,borderRadius:'0 2px 2px 0',background:T.teal}}/>}
-      <Icon s={16} c={active?T.teal:undefined}/>
+        width:3,height:16,borderRadius:'0 2px 2px 0',background:T.teal}}/>}
+      <Icon s={15} c={active?T.teal:undefined}/>
       <span style={{flex:1}}>{label}</span>
       {badge>0&&<span style={{minWidth:18,height:18,borderRadius:9,padding:'0 5px',
         background:T.crit,color:'#fff',fontSize:11,fontWeight:700,
         display:'flex',alignItems:'center',justifyContent:'center'}}>{badge}</span>}
     </button>
-  );
-}
-
-function SectionLabel({label}) {
-  return (
-    <div style={{fontSize:11,fontWeight:700,color:T.lo,textTransform:'uppercase',
-      letterSpacing:'0.07em',padding:'12px 10px 5px'}}>
-      {label}
-    </div>
   );
 }
 
@@ -286,26 +279,9 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
     {id:'inventario', label:'Inventario', Icon:Ico.Box},
   ] : [];
 
-  const navFinanzas = isAdmin ? [
-    {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
-    {id:'analisis',    label:'Análisis Financiero', Icon:Ico.TrendingUp},
-  ] : isAuditor ? [
-    {id:'gastos_fijos',label:'Gastos Fijos',        Icon:Ico.Wallet},
-  ] : [];
-
-  const navRRHH = [
-    {id:'rrhh', label:'Recursos Humanos', Icon:Ico.Users},
-    ...(isAdmin ? [{id:'usuarios', label:'Usuarios', Icon:Ico.Lock}] : []),
-  ];
-
-  const navVentas = (ventasIgssPerm || ventasEmpPerm) ? [
-    ...(ventasIgssPerm ? [{id:'ventas_igss',      label:'IGSS Gomera', Icon:Ico.Receipt}]  : []),
-    ...(ventasEmpPerm  ? [{id:'ventas_empresas',  label:'Empresas',    Icon:Ico.Layers}]   : []),
-  ] : [];
-
   const navCaja = cajaPerm ? [
-    ...(!isAuditor ? [{id:'caja_dia', label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
-    ...(isAuditor  ? [{id:'auditoria', label:'Resumen', Icon:Ico.BarChart}] : []),
+    ...(!isAuditor ? [{id:'caja_dia',      label:'Cuadre del día', Icon:Ico.DollarSign}] : []),
+    ...(isAuditor  ? [{id:'auditoria',     label:'Resumen',        Icon:Ico.BarChart}]   : []),
     {id:'caja_historial', label:'Historial', Icon:Ico.History},
   ] : [];
 
@@ -313,9 +289,53 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
     {id:'compras', label:'Registro de Compras', Icon:Ico.Receipt},
   ] : [];
 
+  const navFinanzas = isAdmin ? [
+    {id:'gastos_fijos', label:'Gastos Fijos',        Icon:Ico.Wallet},
+    {id:'analisis',     label:'Análisis Financiero', Icon:Ico.TrendingUp},
+  ] : isAuditor ? [
+    {id:'gastos_fijos', label:'Gastos Fijos', Icon:Ico.Wallet},
+  ] : [];
+
+  const navVentas = (ventasIgssPerm || ventasEmpPerm) ? [
+    ...(ventasIgssPerm ? [{id:'ventas_igss',     label:'IGSS Gomera', Icon:Ico.Receipt}] : []),
+    ...(ventasEmpPerm  ? [{id:'ventas_empresas', label:'Empresas',    Icon:Ico.Layers}]  : []),
+  ] : [];
+
+  const navRRHH = [
+    {id:'rrhh',    label:'Recursos Humanos', Icon:Ico.Users},
+    ...(isAdmin ? [{id:'usuarios', label:'Usuarios', Icon:Ico.Lock}] : []),
+  ];
+
+  /* ── Grupos del acordeón ── */
+  const groups = [
+    {key:'bodega',   label:'Bodega',          GIcon:Ico.Box,        items:navBodega,  visible:navBodega.length>0},
+    {key:'caja',     label:isAuditor?'Auditoría':'Caja', GIcon:Ico.DollarSign, items:navCaja, visible:navCaja.length>0},
+    {key:'compras',  label:'Compras',          GIcon:Ico.Cart,       items:navCompras, visible:navCompras.length>0},
+    {key:'finanzas', label:'Finanzas',         GIcon:Ico.TrendingUp, items:navFinanzas,visible:navFinanzas.length>0},
+    {key:'ventas',   label:'Ventas',           GIcon:Ico.Receipt,    items:navVentas,  visible:navVentas.length>0},
+    {key:'rrhh',     label:'Recursos Humanos', GIcon:Ico.Users,      items:navRRHH,    visible:true},
+  ];
+
+  /* Determinar el grupo que contiene la vista activa */
+  const activeGroupKey = groups.find(g => g.items.some(i => i.id === view))?.key || null;
+
+  /* Estado del acordeón: abre el grupo activo al inicio */
+  const [openGroups, setOpenGroups] = useState(() =>
+    activeGroupKey ? {[activeGroupKey]: true} : {}
+  );
+
+  /* Al cambiar de vista a otro grupo, abrirlo automáticamente */
+  useEffect(() => {
+    if (activeGroupKey) setOpenGroups(prev => ({...prev, [activeGroupKey]: true}));
+  }, [activeGroupKey]);
+
+  const toggle = (key) => setOpenGroups(prev => ({...prev, [key]: !prev[key]}));
+
   return (
     <aside style={{width:214,flexShrink:0,background:T.surface,
       borderRight:`1px solid ${T.border}`,display:'flex',flexDirection:'column'}}>
+
+      {/* Marca */}
       <div style={{padding:'20px 16px 18px',borderBottom:`1px solid ${T.border}`}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <img src={logoTeal} alt="" style={{width:32,height:32,objectFit:'contain',flexShrink:0}}/>
@@ -326,7 +346,7 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
         </div>
       </div>
 
-      {/* Selector de sede — solo admin (no auditor) */}
+      {/* Selector de sede — solo admin */}
       {isAdmin && sedes.length>0 && (
         <div style={{padding:'10px 12px',borderBottom:`1px solid ${T.border}`}}>
           <div style={{fontSize:10,fontWeight:700,color:T.lo,textTransform:'uppercase',
@@ -341,60 +361,41 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
       )}
 
       <nav style={{flex:1,padding:'4px 8px',overflowY:'auto'}}>
+        {/* Inicio siempre visible */}
         <NavBtn id="inicio" label="Inicio" Icon={Ico.Home} badge={0}
           active={view==='inicio'} onNav={onNav}/>
-        {navBodega.length>0 && (
-          <>
-            <SectionLabel label="Bodega"/>
-            {navBodega.map(({id,label,Icon,badge})=>(
-              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
-                active={view===id} onNav={onNav}/>
-            ))}
-          </>
-        )}
-        {navCaja.length>0 && (
-          <>
-            <SectionLabel label={isAuditor ? 'Auditoría' : 'Caja'}/>
-            {navCaja.map(({id,label,Icon,badge})=>(
-              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
-                active={view===id} onNav={onNav}/>
-            ))}
-          </>
-        )}
-        {navCompras.length>0 && (
-          <>
-            <SectionLabel label="Compras"/>
-            {navCompras.map(({id,label,Icon,badge})=>(
-              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
-                active={view===id} onNav={onNav}/>
-            ))}
-          </>
-        )}
-        {navFinanzas.length>0 && (
-          <>
-            <SectionLabel label="Finanzas"/>
-            {navFinanzas.map(({id,label,Icon,badge})=>(
-              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={badge||0}
-                active={view===id} onNav={onNav}/>
-            ))}
-          </>
-        )}
-        {navVentas.length>0 && (
-          <>
-            <SectionLabel label="Ventas"/>
-            {navVentas.map(({id,label,Icon})=>(
-              <NavBtn key={id} id={id} label={label} Icon={Icon} badge={0}
-                active={view===id} onNav={onNav}/>
-            ))}
-          </>
-        )}
-        <SectionLabel label="Recursos Humanos"/>
-        {navRRHH.map(({id,label,Icon})=>(
-          <NavBtn key={id} id={id} label={label} Icon={Icon} badge={0}
-            active={view===id} onNav={onNav}/>
-        ))}
+
+        <div style={{height:4}}/>
+
+        {/* Grupos acordeón */}
+        {groups.filter(g=>g.visible).map(({key,label,GIcon,items})=>{
+          const isOpen   = !!openGroups[key];
+          const hasActive= items.some(i=>i.id===view);
+          const totalBadge = items.reduce((s,i)=>s+(i.badge||0),0);
+          return (
+            <div key={key} style={{marginBottom:2}}>
+              {/* Cabecera del grupo */}
+              <AccordionHead
+                label={label} GIcon={GIcon} isOpen={isOpen}
+                hasActive={hasActive} totalBadge={totalBadge}
+                onClick={()=>toggle(key)}/>
+              {/* Items del grupo con animación de altura */}
+              <div style={{overflow:'hidden',
+                maxHeight: isOpen ? items.length*38+8+'px' : '0px',
+                transition:'max-height 0.22s ease'}}>
+                <div style={{paddingBottom:2}}>
+                  {items.map(({id,label:lbl,Icon,badge})=>(
+                    <NavBtn key={id} id={id} label={lbl} Icon={Icon}
+                      badge={badge||0} active={view===id} onNav={onNav} indent/>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </nav>
 
+      {/* Pie con nombre y rol */}
       <div style={{padding:'10px 16px 14px',borderTop:`1px solid ${T.border}`}}>
         <div style={{fontSize:12.5,fontWeight:600,color:T.mid,marginBottom:2}}>{profile?.nombre}</div>
         <div style={{fontSize:11.5,color:T.lo}}>
@@ -403,23 +404,46 @@ function Sidebar({view,onNav,alertCount,pedidosBadge,profile,sedes,selectedSede,
       </div>
 
       {/* Sello de desarrollo */}
-      <div style={{
-        padding:'7px 16px 10px',
-        borderTop:`1px solid ${T.border}`,
-        display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-      }}>
+      <div style={{padding:'7px 16px 10px',borderTop:`1px solid ${T.border}`,
+        display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
           stroke={T.tealDk} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
         </svg>
-        <span style={{fontSize:10.5, color:T.mid, letterSpacing:'0.03em'}}>
-          Desarrollado por
-        </span>
-        <span style={{fontSize:11, fontWeight:800, letterSpacing:'0.07em', color:T.tealDk}}>
-          TELOXIS
-        </span>
+        <span style={{fontSize:10.5,color:T.mid,letterSpacing:'0.03em'}}>Desarrollado por</span>
+        <span style={{fontSize:11,fontWeight:800,letterSpacing:'0.07em',color:T.tealDk}}>TELOXIS</span>
       </div>
     </aside>
+  );
+}
+
+/* ── Cabecera de grupo acordeón ──────────────────────────── */
+function AccordionHead({label,GIcon,isOpen,hasActive,totalBadge,onClick}) {
+  const [hov,setHov]=useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{width:'100%',display:'flex',alignItems:'center',gap:8,
+        padding:'7px 10px',border:'none',borderRadius:8,cursor:'pointer',
+        background:hov?'var(--nav-hover)':'transparent',
+        color: hasActive&&!isOpen ? T.tealDk : T.lo,
+        fontFamily:'inherit',fontSize:11,fontWeight:700,
+        letterSpacing:'0.06em',textTransform:'uppercase',
+        transition:'all 0.12s'}}>
+      <GIcon s={14}/>
+      <span style={{flex:1,textAlign:'left'}}>{label}</span>
+      {!isOpen && totalBadge>0 && (
+        <span style={{minWidth:18,height:18,padding:'0 5px',borderRadius:9,
+          background:T.crit,color:'#fff',fontSize:10,fontWeight:700,
+          display:'flex',alignItems:'center',justifyContent:'center'}}>{totalBadge}</span>
+      )}
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{flexShrink:0,transition:'transform 0.2s ease',
+          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)'}}>
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
   );
 }
 
@@ -1500,7 +1524,7 @@ function UsuariosScreen({sedes}) {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
               <Field label="Rol">
                 <TSelect value={editForm.rol}
-                  onChange={e=>setEditForm(f=>({...f,rol:e.target.value,sedeId:'',permBodega:true,permCaja:false}))}
+                  onChange={e=>setEditForm(f=>({...f,rol:e.target.value,sedeId:'',permBodega:true,permCaja:false,permVentasIgss:false,permVentasEmp:false}))}
                   options={[
                     {value:'tecnico',    label:'Técnico'},
                     {value:'secretaria', label:'Secretaria'},
@@ -2278,7 +2302,9 @@ export default function App() {
   const isAdmin      = profile?.rol==='admin';
   const isAuditor    = profile?.rol==='auditor';
   const isSecretaria = profile?.rol==='secretaria';
-  const cajaPerm     = isAdmin || isAuditor || profile?.permisos?.caja===true;
+  const cajaPerm          = isAdmin || isAuditor || profile?.permisos?.caja===true;
+  const ventasIgssPerm    = isAdmin || profile?.permisos?.ventas_igss===true;
+  const ventasEmpPerm     = isAdmin || profile?.permisos?.ventas_empresas===true;
   const currentSedeId = isAdmin ? selectedSede : profile?.sede_id;
   const currentSedeName = sedes.find(s=>s.id===currentSedeId)?.nombre || (isAdmin&&!currentSedeId?null:profile?.sedes?.nombre);
 
@@ -2318,13 +2344,15 @@ export default function App() {
   },[isAuditor,view]);
 
 
-  // Secretaria: solo puede ver compras (y caja si tiene permiso), rrhh
+  // Secretaria: solo puede ver compras (y caja/ventas si tiene permiso), rrhh
   useEffect(()=>{
     if(!isSecretaria) return;
     const allowed=['inicio','compras','inventario','rrhh'];
-    if(profile?.permisos?.caja===true) allowed.push('caja_dia','caja_historial');
+    if(profile?.permisos?.caja===true)         allowed.push('caja_dia','caja_historial');
+    if(profile?.permisos?.ventas_igss===true)  allowed.push('ventas_igss');
+    if(profile?.permisos?.ventas_empresas===true) allowed.push('ventas_empresas');
     if(!allowed.includes(view)) setView('inicio');
-  },[isSecretaria,view,profile?.permisos?.caja]);
+  },[isSecretaria,view,profile?.permisos?.caja,profile?.permisos?.ventas_igss,profile?.permisos?.ventas_empresas]);
 
   /* ── Cargar items de Supabase ─────────────────────────── */
   const loadItems = useCallback(async()=>{

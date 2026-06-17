@@ -27,6 +27,31 @@ function EstadoBadge({ estado }) {
   );
 }
 
+/* ── Extrae líneas de detalle del XML DTE almacenado ── */
+function parsearItems(xmlRaw) {
+  if (!xmlRaw) return [];
+  try {
+    const doc = new DOMParser().parseFromString(xmlRaw, 'application/xml');
+    const byName = (parent, name) =>
+      parent.getElementsByTagName(name)[0] || parent.getElementsByTagName(`dte:${name}`)[0];
+    const txt = (el, name) => byName(el, name)?.textContent?.trim() || '';
+    const allItems = [
+      ...Array.from(doc.getElementsByTagName('Item')),
+      ...Array.from(doc.getElementsByTagName('dte:Item')),
+    ];
+    return allItems.map(el => ({
+      linea:         el.getAttribute('NumeroLinea') || '',
+      tipo:          el.getAttribute('BienOrServicio') === 'B' ? 'Bien' : 'Servicio',
+      cantidad:      txt(el, 'Cantidad'),
+      unidad:        txt(el, 'UnidadMedida'),
+      descripcion:   txt(el, 'Descripcion'),
+      precioUnit:    parseFloat(txt(el, 'PrecioUnitario') || '0'),
+      descuento:     parseFloat(txt(el, 'Descuento') || '0'),
+      total:         parseFloat(txt(el, 'Total') || '0'),
+    }));
+  } catch { return []; }
+}
+
 /* ── Fila de factura parseada (preview antes de guardar) ─── */
 function FilaPreview({ item, onRemove }) {
   const ok = !item.error;
@@ -57,14 +82,18 @@ function FilaPreview({ item, onRemove }) {
 /* ─── IgssGomeraTab ──────────────────────────────────────── */
 export default function IgssGomeraTab() {
   const { profile } = useAuth();
-  const [facturas,  setFacturas]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [guardando, setGuardando] = useState(false);
-  const [preview,   setPreview]   = useState([]);       // items parseados esperando confirmación
-  const [showPrev,  setShowPrev]  = useState(false);
-  const [editItem,  setEditItem]  = useState(null);     // factura siendo editada
-  const [editForm,  setEditForm]  = useState({});
-  const [msg,       setMsg]       = useState('');
+  const isSecretaria = profile?.rol === 'secretaria';
+
+  const [facturas,       setFacturas]       = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [guardando,      setGuardando]      = useState(false);
+  const [preview,        setPreview]        = useState([]);
+  const [showPrev,       setShowPrev]       = useState(false);
+  const [editItem,       setEditItem]       = useState(null);
+  const [editForm,       setEditForm]       = useState({});
+  const [detailItem,     setDetailItem]     = useState(null);
+  const [msg,            setMsg]            = useState('');
+  const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const fileRef = useRef(null);
 
   const cargar = useCallback(async () => {
@@ -84,7 +113,6 @@ export default function IgssGomeraTab() {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     fileRef.current.value = '';
-
     const resultados = await Promise.all(files.map(async (f) => {
       try {
         const texto = await f.text();
@@ -106,7 +134,8 @@ export default function IgssGomeraTab() {
     const validas = preview.filter(p => !p.error);
     if (!validas.length) return;
     setGuardando(true);
-    let ok = 0, dup = 0, err = 0;
+    let ok = 0, dup = 0;
+    const errores = [];
 
     for (const item of validas) {
       const { error } = await supabase.from('ventas_facturas').insert({
@@ -128,24 +157,37 @@ export default function IgssGomeraTab() {
       });
       if (!error) ok++;
       else if (error.code === '23505') dup++;
-      else err++;
+      else errores.push(error.message || error.code || 'Error desconocido');
     }
 
     setGuardando(false);
     setShowPrev(false);
     setPreview([]);
+
+    if (errores.length) {
+      setMsg(`❌ Error al guardar: ${errores[0]}`);
+      setTimeout(() => setMsg(''), 12000);
+      return;
+    }
     const partes = [];
     if (ok)  partes.push(`${ok} factura(s) guardada(s)`);
     if (dup) partes.push(`${dup} duplicada(s) ignorada(s)`);
-    if (err) partes.push(`${err} con error`);
     setMsg(partes.join(' · '));
-    setTimeout(() => setMsg(''), 4000);
+    setTimeout(() => setMsg(''), 5000);
     cargar();
   };
 
-  /* ── Cambiar estado de factura ── */
-  const cambiarEstado = async (id, estado) => {
-    await supabase.from('ventas_facturas').update({ estado, updated_at: new Date().toISOString() }).eq('id', id);
+  /* ── Marcar como pagada con fecha/hora actual ── */
+  const marcarPagada = async (f) => {
+    const ahora    = new Date();
+    const fecha_pago = ahora.toISOString().split('T')[0];
+    const hora_pago  = ahora.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
+    await supabase.from('ventas_facturas').update({
+      estado:     'pagada',
+      fecha_pago,
+      notas:      (f.notas ? f.notas + '\n' : '') + `Pagada el ${fecha_pago} a las ${hora_pago}`,
+      updated_at: ahora.toISOString(),
+    }).eq('id', f.id);
     cargar();
   };
 
@@ -156,7 +198,7 @@ export default function IgssGomeraTab() {
     cargar();
   };
 
-  /* ── Abrir edición de nota ── */
+  /* ── Abrir edición ── */
   const abrirEditar = (f) => {
     setEditItem(f);
     setEditForm({ estado: f.estado, notas: f.notas || '', fecha_pago: f.fecha_pago || '' });
@@ -173,7 +215,20 @@ export default function IgssGomeraTab() {
     cargar();
   };
 
-  /* ── Totales ── */
+  /* ── Filtro por monto de depósito ── */
+  const facturasFiltradas = filtroBusqueda.trim()
+    ? facturas.filter(f => {
+        const q = filtroBusqueda.trim().replace(/[^0-9.]/g, '');
+        if (!q) return true;
+        return String(Number(f.pago_esperado).toFixed(2)).includes(q) ||
+               String(Number(f.monto_total).toFixed(2)).includes(q) ||
+               (f.serie || '').toLowerCase().includes(filtroBusqueda.toLowerCase()) ||
+               (f.numero_factura || '').toLowerCase().includes(filtroBusqueda.toLowerCase()) ||
+               (f.nombre_receptor || '').toLowerCase().includes(filtroBusqueda.toLowerCase());
+      })
+    : facturas;
+
+  /* ── Totales (solo activas) ── */
   const activas    = facturas.filter(f => f.estado !== 'anulada');
   const totalBruto = activas.reduce((s, f) => s + Number(f.monto_total), 0);
   const totalIVA   = activas.reduce((s, f) => s + Number(f.retencion_iva), 0);
@@ -200,19 +255,21 @@ export default function IgssGomeraTab() {
       </div>
 
       {msg && (
-        <div style={{ background: T.okBg, border: `1px solid ${T.ok}44`, borderRadius: 10,
-          padding: '10px 16px', fontSize: 13, color: T.ok, fontWeight: 600 }}>
-          ✅ {msg}
+        <div style={{ background: msg.startsWith('❌') ? T.critBg : T.okBg,
+          border: `1px solid ${msg.startsWith('❌') ? T.crit : T.ok}44`,
+          borderRadius: 10, padding: '10px 16px', fontSize: 13,
+          color: msg.startsWith('❌') ? T.crit : T.ok, fontWeight: 600 }}>
+          {msg}
         </div>
       )}
 
       {/* Tarjetas de resumen */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         {[
-          { label: 'Total facturas',   val: activas.length,     fmt: v => v,        color: T.teal,   bg: T.tealXL },
-          { label: 'Pendientes pago',  val: pendientes,         fmt: v => v,        color: '#D97706', bg: '#FEF9C3' },
-          { label: 'Monto total',      val: totalBruto,         fmt: fmtQ,          color: T.hi,     bg: T.canvas },
-          { label: 'Depósito esperado',val: totalNeto,          fmt: fmtQ,          color: T.ok,     bg: '#D1FAE5' },
+          { label: 'Total facturas',    val: activas.length, fmt: v => v,   color: T.teal,    bg: T.tealXL },
+          { label: 'Pendientes pago',   val: pendientes,     fmt: v => v,   color: '#D97706', bg: '#FEF9C3' },
+          { label: 'Monto total',       val: totalBruto,     fmt: fmtQ,     color: T.hi,      bg: T.canvas },
+          { label: 'Depósito esperado', val: totalNeto,      fmt: fmtQ,     color: T.ok,      bg: '#D1FAE5' },
         ].map(({ label, val, fmt, color, bg }) => (
           <div key={label} style={{ background: bg, borderRadius: 10, padding: '12px 16px',
             border: `1px solid ${color}33` }}>
@@ -227,20 +284,51 @@ export default function IgssGomeraTab() {
         ))}
       </div>
 
+      {/* Barra de búsqueda */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.lo}
+            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            value={filtroBusqueda}
+            onChange={e => setFiltroBusqueda(e.target.value)}
+            placeholder="Buscar por monto, factura o receptor…"
+            style={{ width: '100%', padding: '8px 12px 8px 32px', border: `1px solid ${T.border}`,
+              borderRadius: 8, fontFamily: 'inherit', fontSize: 13, color: T.hi,
+              background: 'var(--input-bg)', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        {filtroBusqueda && (
+          <button onClick={() => setFiltroBusqueda('')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.lo, fontSize: 12 }}>
+            Limpiar
+          </button>
+        )}
+        {filtroBusqueda && (
+          <span style={{ fontSize: 12, color: T.lo }}>
+            {facturasFiltradas.length} resultado(s)
+          </span>
+        )}
+      </div>
+
       {/* Tabla de facturas */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 32, color: T.lo }}>Cargando…</div>
-      ) : facturas.length === 0 ? (
+      ) : facturasFiltradas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: T.lo, fontSize: 13 }}>
-          No hay facturas registradas. Carga archivos XML del DTE.
+          {filtroBusqueda ? 'Sin resultados para esa búsqueda.' : 'No hay facturas registradas. Carga archivos XML del DTE.'}
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: T.canvas }}>
-                {['Factura','Fecha','Monto total','IVA retenido','Depósito esperado','Estado',''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: h === '' ? 'center' : 'left',
+                {['Factura','Fecha','Monto total','IVA retenido','Depósito esperado','Estado','Acciones'].map(h => (
+                  <th key={h} style={{ padding: '8px 12px',
+                    textAlign: ['Monto total','IVA retenido','Depósito esperado'].includes(h) ? 'right' : 'left',
                     fontSize: 11, fontWeight: 700, color: T.lo, textTransform: 'uppercase',
                     letterSpacing: '0.07em', borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>
                     {h}
@@ -249,12 +337,15 @@ export default function IgssGomeraTab() {
               </tr>
             </thead>
             <tbody>
-              {facturas.map((f, i) => (
+              {facturasFiltradas.map((f, i) => (
                 <tr key={f.id} style={{ background: i % 2 === 0 ? T.surface : T.canvas,
                   borderBottom: `1px solid ${T.border}`,
                   opacity: f.estado === 'anulada' ? 0.45 : 1 }}>
-                  <td style={{ padding: '10px 12px' }}>
-                    <div style={{ fontWeight: 600, color: T.hi, fontSize: 13 }}>
+                  {/* Factura — clic para ver detalle */}
+                  <td style={{ padding: '10px 12px', cursor: 'pointer' }}
+                    onClick={() => setDetailItem(f)}>
+                    <div style={{ fontWeight: 600, color: T.tealDk, fontSize: 13,
+                      textDecoration: 'underline dotted', textUnderlineOffset: 3 }}>
                       {f.serie}-{f.numero_factura}
                     </div>
                     <div style={{ fontSize: 11, color: T.lo, marginTop: 2 }}>
@@ -277,22 +368,44 @@ export default function IgssGomeraTab() {
                     <EstadoBadge estado={f.estado} />
                     {f.fecha_pago && (
                       <div style={{ fontSize: 10.5, color: T.lo, marginTop: 3 }}>
-                        Pagada {fmtFecha(f.fecha_pago)}
+                        {fmtFecha(f.fecha_pago)}
                       </div>
                     )}
                   </td>
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                  <td style={{ padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'center', justifyContent: 'flex-end' }}>
+                      {/* Secretaria: solo puede ver detalle y usar el lápiz para corrección/anulación */}
+                      {!isSecretaria && f.estado !== 'pagada' && f.estado !== 'anulada' && (
+                        <button onClick={() => marcarPagada(f)} title="Marcar como pagada ahora"
+                          style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: 6,
+                            padding: '5px 11px', cursor: 'pointer', color: '#065F46',
+                            fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          ✓ Pagado
+                        </button>
+                      )}
                       <button onClick={() => abrirEditar(f)} title="Editar estado / notas"
-                        style={{ background: T.tealXL, border: 'none', borderRadius: 6,
-                          padding: '5px 8px', cursor: 'pointer', color: T.tealDk, fontSize: 12 }}>
-                        ✏️
+                        style={{ background: T.canvas, border: `1px solid ${T.border}`, borderRadius: 6,
+                          padding: '5px 7px', cursor: 'pointer', color: T.lo,
+                          lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
                       </button>
-                      <button onClick={() => eliminar(f)} title="Eliminar"
-                        style={{ background: T.critBg, border: 'none', borderRadius: 6,
-                          padding: '5px 8px', cursor: 'pointer', color: T.crit, fontSize: 12 }}>
-                        🗑
-                      </button>
+                      {!isSecretaria && (
+                        <button onClick={() => eliminar(f)} title="Eliminar"
+                          style={{ background: T.critBg, border: `1px solid #FECACA`, borderRadius: 6,
+                            padding: '5px 7px', cursor: 'pointer', color: T.crit,
+                            lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                            <path d="M10 11v6"/><path d="M14 11v6"/>
+                            <path d="M9 6V4h6v2"/>
+                          </svg>
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -348,14 +461,21 @@ export default function IgssGomeraTab() {
             </p>
             <Field label="Estado">
               <TSelect value={editForm.estado} onChange={e => setEditForm(f => ({ ...f, estado: e.target.value }))}
-                options={[
-                  { value: 'pendiente',     label: 'Pendiente' },
-                  { value: 'pagada',        label: 'Pagada' },
-                  { value: 'en_correccion', label: 'En corrección' },
-                  { value: 'anulada',       label: 'Anulada' },
-                ]} />
+                options={isSecretaria
+                  ? [
+                      { value: 'pendiente',     label: 'Pendiente' },
+                      { value: 'en_correccion', label: 'En corrección' },
+                      { value: 'anulada',       label: 'Anulada' },
+                    ]
+                  : [
+                      { value: 'pendiente',     label: 'Pendiente' },
+                      { value: 'pagada',        label: 'Pagada' },
+                      { value: 'en_correccion', label: 'En corrección' },
+                      { value: 'anulada',       label: 'Anulada' },
+                    ]
+                } />
             </Field>
-            {editForm.estado === 'pagada' && (
+            {editForm.estado === 'pagada' && !isSecretaria && (
               <Field label="Fecha de pago">
                 <TInput type="date" value={editForm.fecha_pago}
                   onChange={e => setEditForm(f => ({ ...f, fecha_pago: e.target.value }))} />
@@ -371,6 +491,98 @@ export default function IgssGomeraTab() {
             </div>
           </>
         )}
+      </Modal>
+
+      {/* Modal: Detalle de factura (líneas del DTE) */}
+      <Modal open={!!detailItem} onClose={() => setDetailItem(null)}
+        title={`Detalle — ${detailItem?.serie}-${detailItem?.numero_factura}`} maxWidth={680}>
+        {detailItem && (() => {
+          const items = parsearItems(detailItem.xml_raw);
+          return (
+            <>
+              {/* Encabezado */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
+                {[
+                  { label: 'Receptor', value: detailItem.nombre_receptor || detailItem.nit_receptor },
+                  { label: 'Fecha emisión', value: fmtFecha(detailItem.fecha_emision) },
+                  { label: 'Estado', value: ESTADO_CFG[detailItem.estado]?.label || detailItem.estado },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ background: T.canvas, borderRadius: 8, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 10.5, color: T.lo, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: T.hi, fontWeight: 500 }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Líneas de detalle */}
+              {items.length > 0 ? (
+                <div style={{ overflowX: 'auto', marginBottom: 16 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                    <thead>
+                      <tr style={{ background: T.canvas }}>
+                        {['#','Tipo','Cant.','Unidad','Descripción','P. Unit.','Descuento','Total'].map(h => (
+                          <th key={h} style={{ padding: '7px 10px', textAlign: h === 'Descripción' ? 'left' : 'right',
+                            fontSize: 10, fontWeight: 700, color: T.lo, textTransform: 'uppercase',
+                            letterSpacing: '0.06em', borderBottom: `1px solid ${T.border}`,
+                            ...(h === '#' || h === 'Tipo' || h === 'Cant.' || h === 'Unidad' ? { textAlign: 'left' } : {}) }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((it, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${T.border}`,
+                          background: i % 2 === 0 ? T.surface : T.canvas }}>
+                          <td style={{ padding: '8px 10px', fontSize: 11.5, color: T.lo }}>{it.linea}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 11.5, color: T.mid }}>{it.tipo}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 11.5, color: T.mid }}>{it.cantidad}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 11.5, color: T.mid }}>{it.unidad}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12.5, color: T.hi,
+                            fontWeight: 500, maxWidth: 260, wordBreak: 'break-word' }}>{it.descripcion}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: T.mid,
+                            textAlign: 'right' }}>{fmtQ(it.precioUnit)}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: '#D97706',
+                            textAlign: 'right' }}>{it.descuento > 0 ? `−${fmtQ(it.descuento)}` : '—'}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12.5, fontWeight: 700,
+                            color: T.hi, textAlign: 'right' }}>{fmtQ(it.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: T.lo, fontSize: 12.5 }}>
+                  No se encontraron líneas de detalle en el XML almacenado.
+                </div>
+              )}
+
+              {/* Totales del pie */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 24,
+                background: T.canvas, borderRadius: 8, padding: '10px 16px' }}>
+                {[
+                  { label: 'Subtotal', value: detailItem.subtotal, color: T.mid },
+                  { label: 'IVA retenido', value: detailItem.retencion_iva, color: '#D97706' },
+                  { label: 'Depósito esperado', value: detailItem.pago_esperado, color: T.ok },
+                ].map(({ label, value, color }) => (
+                  <div key={label} style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 10.5, color: T.lo, fontWeight: 700,
+                      textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color }}>{fmtQ(value)}</div>
+                  </div>
+                ))}
+              </div>
+
+              {detailItem.notas && (
+                <div style={{ marginTop: 12, background: '#FEFCE8', borderRadius: 8,
+                  padding: '8px 12px', fontSize: 12, color: '#92400E' }}>
+                  <strong>Notas:</strong> {detailItem.notas}
+                </div>
+              )}
+            </>
+          );
+        })()}
       </Modal>
     </div>
   );
