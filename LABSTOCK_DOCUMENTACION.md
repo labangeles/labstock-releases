@@ -1,12 +1,12 @@
 # LabStock — Documentación Técnica Completa
 **Laboratorio Clínico Los Ángeles · Costa Sur, Guatemala**
-**Versión actual: 1.6.15** | Última actualización: 15 de junio de 2026
+**Versión actual: 1.7.2** | Última actualización: 17 de junio de 2026
 
 ---
 
 ## 1. Resumen del Sistema
 
-LabStock es una aplicación de escritorio para gestión de inventario, caja chica, compras a proveedores, gastos fijos y recursos humanos del Laboratorio Clínico Los Ángeles, que opera en **5 sedes** en la Costa Sur de Guatemala.
+LabStock es una aplicación de escritorio para gestión de inventario, caja chica, compras a proveedores, gastos fijos, ventas y recursos humanos del Laboratorio Clínico Los Ángeles, que opera en **5 sedes** en la Costa Sur de Guatemala.
 
 ### Stack tecnológico
 | Capa | Tecnología |
@@ -30,9 +30,10 @@ LabStock es una aplicación de escritorio para gestión de inventario, caja chic
 labstock/
 ├── electron/
 │   ├── main.js          # Proceso principal (ventana, tray, IPC, auto-updater)
-│   └── preload.js       # Bridge renderer ↔ main (contextBridge)
+│   └── preload.js       # Bridge renderer → main (contextBridge)
 ├── src/
-│   ├── App.jsx          # Root: routing de vistas, CRUD items, sidebar, modales globales
+│   ├── App.jsx          # Root: routing de vistas, CRUD items, sidebar acordeón, modales globales
+│   ├── index.css        # Estilos globales; user-select:none en body para Electron
 │   ├── contexts/
 │   │   ├── AuthContext.jsx    # Sesión Supabase, perfil, sedes
 │   │   ├── ThemeContext.jsx   # Dark / Light mode
@@ -41,31 +42,48 @@ labstock/
 │   │   └── supabase.js        # Cliente Supabase inicializado
 │   ├── shared/
 │   │   └── ui.jsx             # Tokens (T), íconos (Ico), Btn, IconBtn, Modal, Field, etc.
+│   ├── components/
+│   │   ├── Emblem.jsx         # Medallas SVG metálicas (4 formas, 12 glifos, 4 paletas)
+│   │   └── Reconocimientos.jsx # Catálogo de emblemas con estados earned/locked
 │   └── features/
 │       ├── inicio/
-│       │   └── InicioScreen.jsx
+│       │   ├── InicioScreen.jsx
+│       │   └── components/
+│       │       ├── MarcajeWidget.jsx    # Widget de asistencia paso a paso
+│       │       ├── AlertasRRHH.jsx
+│       │       └── PromocionesSection.jsx
 │       ├── caja/
 │       │   ├── CajaScreen.jsx
 │       │   ├── HistorialCajaScreen.jsx
 │       │   ├── AuditorDashboard.jsx
 │       │   ├── hooks/useCuadre.js
 │       │   ├── lib/exportExcel.js
-│       │   └── components/    # CerrarCuadreModal, DepositoModal, GastoModal, etc.
+│       │   └── components/
 │       ├── compras/
 │       │   └── ComprasScreen.jsx
+│       ├── ventas/
+│       │   ├── IgssGomeraTab.jsx        # Facturación DTE FEL IGSS — sede La Gomera
+│       │   └── EmpresasTab.jsx          # Facturación empresas privadas
 │       ├── admin/
 │       │   ├── GastosFijosScreen.jsx
 │       │   └── AnalisisFinancieroScreen.jsx
-│       └── rrhh/                          ← MÓDULO NUEVO (ver sección 14)
-│           ├── RRHHScreen.jsx             # Pantalla raíz con tabs
-│           ├── components/
+│       └── rrhh/
+│           ├── RRHHScreen.jsx           # Pantalla raíz con tabs (autoservicio + gestión)
+│           ├── autoservicio/
+│           │   ├── MiPerfilTab.jsx      # Datos personales + foto + bancarios
+│           │   ├── MisDocumentosTab.jsx
+│           │   ├── MisVacacionesTab.jsx
+│           │   └── MiExpedienteTab.jsx
+│           ├── gestion/
 │           │   ├── EmpleadosTab.jsx
-│           │   ├── NominaTab.jsx
 │           │   ├── AsistenciaTab.jsx
-│           │   └── PrestacionesTab.jsx
+│           │   ├── AprobacionesTab.jsx
+│           │   └── DisciplinaTab.jsx    # Solo amonestaciones/suspensiones (sin reconocimientos)
 │           └── lib/
-│               ├── calcNomina.js          # Cálculo IGSS, ISR, bonificaciones
-│               └── exportNomina.js        # Export .xlsx de nómina
+│               ├── useMiEmpleado.js     # Hook: fila de empleados del usuario actual
+│               ├── storage.js           # Upload/download firmado de fotos y documentos
+│               ├── edad.js              # calcularEdad, calcularAntiguedad
+│               └── guatemala.js         # Departamentos y municipios
 ├── supabase/
 │   └── migrations/
 └── dist-electron/          # Output del build
@@ -77,25 +95,33 @@ labstock/
 
 | Rol | Acceso |
 |-----|--------|
-| **admin** | Todo — bodega, caja, compras, pedidos, usuarios, gastos fijos, análisis financiero, RRHH |
+| **admin** | Todo: bodega, caja, compras, pedidos, usuarios, gastos fijos, análisis financiero, ventas, RRHH completo |
 | **tecnico** | Bodega (su sede), caja (si tiene permiso), pedidos |
 | **auditor** | Caja historial + compras + gastos fijos — solo lectura |
-| **secretaria** | Inventario (solo lectura), compras (crear/ver), caja si tiene permiso |
+| **secretaria** | Inventario (solo lectura), compras (crear/ver), caja/ventas si tiene permiso |
 
-### Permisos especiales (campo `permisos` en profiles)
+### Permisos especiales (campo `permisos` JSONB en profiles)
 ```js
-permisos.caja   = true   // tecnico/secretaria puede ver caja
-permisos.bodega = false  // tecnico no ve bodega
+permisos.caja            = true   // tecnico/secretaria puede ver caja
+permisos.bodega          = false  // tecnico no ve bodega
+permisos.ventas_igss     = true   // secretaria puede ver IGSS Gomera
+permisos.ventas_empresas = true   // secretaria puede ver Ventas Empresas
 ```
 
-### Vistas por rol (App.jsx)
+### Vistas permitidas por rol — guardia de navegación (App.jsx)
 ```js
-// Auditor
-['inicio','auditoria','caja_historial','compras','gastos_fijos']
-
-// Secretaria
-['inicio','compras','inventario'] + ['caja_dia','caja_historial'] si cajaPerm
+// Secretaria — base
+['inicio', 'compras', 'inventario']
+// + si permisos.caja
+['caja_dia', 'caja_historial']
+// + si permisos.ventas_igss
+['ventas_igss']
+// + si permisos.ventas_empresas
+['ventas_empresas']
 ```
+
+> Al cambiar el rol de un usuario en el modal de edición, se resetean automáticamente:
+> `sedeId`, `permBodega`, `permCaja`, `permVentasIgss`, `permVentasEmp`
 
 ---
 
@@ -120,89 +146,184 @@ permisos.bodega = false  // tecnico no ve bodega
 | `proveedores` | Catálogo de proveedores |
 | `gastos_fijos` | Plantillas de gastos fijos mensuales |
 | `gastos_fijos_pagos` | Registro de pago mensual — UNIQUE(gasto_fijo_id, mes, anio) |
+| `ventas_igss` | Facturas DTE FEL emitidas al IGSS (sede La Gomera) |
+| `ventas_empresas` | Facturas emitidas a empresas privadas |
+| `empleados` | Expedientes de empleados (sin datos monetarios — privacidad) |
+| `cargos` | Catálogo de puestos |
+| `empleado_datos_bancarios` | Datos bancarios del empleado (separados por privacidad) |
+| `acciones_disciplinarias` | Amonestaciones, suspensiones y reconocimientos |
+| `asistencia` | Marcajes diarios de entrada/salida/breaks |
+| `vacaciones_permisos` | Solicitudes y aprobaciones de vacaciones |
+| `feriados` | Feriados de la organización |
+| `v_saldo_vacaciones` | Vista de días disponibles de vacaciones |
 
-### Sedes (nombres exactos en BD)
+### Sedes
 ```
-Santa Lucía   ← sede central, receptora de pedidos
+Santa Lucía   — sede central, receptora de pedidos
 La Democracia
-La Gomera     ← permite_compras = true
+La Gomera     — permite_compras = true, módulo IGSS Gomera
 Sipacate
 Siquinalá
 ```
 
 ### RLS — Patrón estándar
 ```sql
--- Leer: cualquier miembro de la organización
 USING (organizacion_id = auth_org_id())
-
--- Escribir: solo admin (subquery inline — NO usar auth_role())
 WITH CHECK (
   (SELECT rol FROM profiles WHERE profiles.id = auth.uid()) = 'admin'
 )
 ```
 
-> ⚠️ Siempre usar subquery inline para verificar rol. La función `auth_role()` puede ser inestable en RLS.
-> ⚠️ `CREATE POLICY IF NOT EXISTS` no existe en PostgreSQL. Usar `DROP POLICY IF EXISTS` + `CREATE POLICY`.
+> ⚠️ Siempre usar subquery inline para verificar rol. No usar `auth_role()`.
+> ⚠️ `CREATE POLICY IF NOT EXISTS` no existe. Usar `DROP POLICY IF EXISTS` + `CREATE POLICY`.
 
 ---
 
 ## 5. Módulos funcionales
 
-### 5.1 Inicio (`InicioScreen`)
-- Saludo por hora, nombre sin título académico, frase del día
-- Alertas urgentes por rol: insumos críticos, cuadres sin cerrar, gastos pendientes, pedidos activos
+### 5.1 Inicio
+- Saludo por hora, nombre sin título académico, frase del día rotativa
+- **Foto de perfil** desde bucket `rrhh-fotos` con URL firmada
+- **Emblema SVG** del mes debajo de la foto (si el empleado tiene reconocimientos ganados); tooltip al hover
+- **MarcajeWidget**: pasos progresivos — Entrada → Desayuno → Regreso → Almuerzo → Regreso → Salida
+- Alertas por rol: insumos críticos, cuadres sin cerrar, gastos pendientes, pedidos activos
 
 ### 5.2 Bodega / Inventario
-- CRUD insumos (código, nombre, categoría, unidad, stock actual/mínimo/máximo)
-- Estados: OK / Precaución (≤100% mínimo) / Crítico (≤50%) / Agotado
-- Flag `en_uso` — insumos actualmente en uso
-- Importar CSV (auto-detecta separador `,` o `;`, auto-detecta encoding UTF-8/Windows-1252)
-- Exportar CSV (BOM + sep=, + CRLF para Excel)
-- Código auto-generado por categoría: `REA-0001`, `CON-0002`, etc.
-- Upsert por `(codigo, sede_id)` — reimportar actualiza sin duplicar
-- Realtime via Supabase channel
-- Secretaria: solo lectura
+- CRUD insumos; estados OK / Precaución / Crítico / Agotado; flag `en_uso`
+- Importar/exportar CSV; código auto-generado por categoría (`REA-0001`, etc.)
+- Upsert por `(codigo, sede_id)`; Realtime; secretaria: solo lectura
 
-### 5.3 Caja (`CajaScreen`)
-- Un cuadre por sede por día; apertura automática
-- Ingresos, gastos con categoría/comprobante, depósitos bancarios
-- Cálculo: caja final, depósito esperado, diferencia (sobrante/faltante)
-- Cierre con firma del admin; badge en tray cuando hay cuadres sin cerrar
+### 5.3 Caja
+- Un cuadre por sede por día; apertura automática; cierre con firma admin
+- Ingresos, gastos, depósitos; cálculo sobrante/faltante; badge en tray
 
-### 5.4 Historial de Caja (`HistorialCajaScreen`)
+### 5.4 Historial de Caja
 - Filtros sede/fechas/estado; admin puede reabrir cuadres
-- Muestra nota de comentario cuando hay sobrante, faltante, o no se registró depósito
-- Exportación Excel (.xlsx) con 3 hojas: Resumen, Gastos, Depósitos
+- Exportación Excel (.xlsx): Resumen, Gastos, Depósitos
 
-### 5.5 Auditor Dashboard (`AuditorDashboard`)
-- Resumen contable con gráficas (barras por sede, tendencia diaria)
-- Filtros: semana / mes / mes anterior / últimos 30 días / historial
+### 5.5 Auditor Dashboard
+- Gráficas: barras por sede, tendencia diaria; filtros de período
 
-### 5.6 Compras (`ComprasScreen`)
-- Registro por proveedor del catálogo: factura, tipo doc, monto, cadena frío
-- Crédito: días + fecha de vencimiento automática, badge por estado
-- Exportación CSV
+### 5.6 Compras
+- Registro por proveedor: factura, tipo, monto, cadena frío, crédito; exportar CSV
 
-### 5.7 Pedidos (`PedidosScreen`)
-- Carrito de items entre sedes → Pendiente → En proceso → Enviado → Recibido
-- Referencia auto `PED-0001…`; badge en sidebar para Santa Lucía
-- Admin puede eliminar pedidos del historial
+### 5.7 Pedidos
+- Carrito entre sedes; estados; referencia `PED-0001…`; admin puede eliminar
 
-### 5.8 Gastos Fijos (`GastosFijosScreen`)
-- Configuración (admin): plantillas con nombre, sede, monto, banco, día de vencimiento
-- Checklist mensual: auto-generado, marcar pagado con comprobante
-- Auditor: solo lectura + exportar CSV
+### 5.8 Ventas
+- **IGSS Gomera**: facturas DTE FEL; parseo XML automático (NIT, autorización, monto)
+- **Empresas**: facturación a clientes privados
+- Permisos granulares: `ventas_igss` y `ventas_empresas` en profiles JSONB
+- Grupo "Ventas" en sidebar visible solo si el usuario tiene al menos un permiso activo
 
-### 5.9 Análisis Financiero (`AnalisisFinancieroScreen`)
+### 5.9 Gastos Fijos
+- Plantillas (admin): nombre, sede, monto, banco, día vencimiento
+- Checklist mensual auto-generado; auditor: solo lectura + exportar CSV
+
+### 5.10 Análisis Financiero
 - Solo admin; ingresos vs egresos por sede, utilidad neta por mes
 
-### 5.10 Usuarios (`UsuariosScreen`)
-- Solo admin; crea/edita usuarios via Supabase Admin API (service role en main process)
-- Deshabilitar / habilitar usuarios; resetear contraseña; contraseña mínimo 3 caracteres
+### 5.11 Usuarios
+- Solo admin; crea/edita vía Supabase Admin API (service role en main process)
+- Deshabilitar/habilitar; resetear contraseña (mínimo 3 caracteres)
 
 ---
 
-## 6. Electron — IPC Handlers
+## 6. Módulo RRHH
+
+### 6.1 Acceso
+| Rol | Autoservicio | Gestión |
+|-----|-------------|---------|
+| admin | ✓ | ✓ completo |
+| auditor | ✓ | ✓ solo lectura |
+| tecnico / secretaria | ✓ | ✗ |
+
+### 6.2 Tabs autoservicio (todos los roles)
+| Tab | Descripción |
+|-----|-------------|
+| Mi perfil | Datos personales, foto, datos bancarios |
+| Mis documentos | Documentos en bucket `rrhh-documentos` |
+| Vacaciones | Solicitar y ver estado |
+| Mi expediente | Datos laborales propios (sin salario) |
+| **Mis reconocimientos** | Emblemas SVG del mes ganados/bloqueados |
+
+### 6.3 Tabs de gestión (admin / auditor)
+| Tab | Roles | Descripción |
+|-----|-------|-------------|
+| Empleados | admin, auditor | CRUD expedientes |
+| Asistencia | admin, auditor | Registro diario |
+| Nómina | admin, auditor | Generación y aprobación |
+| Prestaciones | admin, auditor | Bono 14, aguinaldo, IGSS |
+| Aprobaciones | admin, auditor | Aprobar vacaciones |
+| Disciplina | admin | Amonestaciones y suspensiones |
+
+### 6.4 Sistema de Reconocimientos
+
+#### Catálogo (12 emblemas)
+| ID | Título | Paleta | Forma |
+|----|--------|--------|-------|
+| `empleado` | Empleado del mes | gold | sunburst |
+| `puntual` | Puntualidad sobresaliente | teal | medallion |
+| `desempeno` | Desempeño excepcional | gold | medallion |
+| `equipo` | Espíritu de equipo | teal | medallion |
+| `calidad` | Calidad en resultados | steel | hexagon |
+| `iniciativa` | Iniciativa y proactividad | teal | medallion |
+| `antiguedad` | Años de servicio | gold | medallion |
+| `paciente` | Atención al paciente | teal | medallion |
+| `metas` | Superación de metas | gold | medallion |
+| `actitud` | Actitud positiva | teal | sunburst |
+| `compromiso` | Compromiso con la calidad | steel | shield |
+| `innovacion` | Innovación y mejora | teal | hexagon |
+
+#### Reset mensual
+- Todos los reconocimientos se resetean el 1 de cada mes (query filtra por mes actual)
+- **Años de servicio** es permanente: query sin filtro de fecha para este título
+- La tabla `acciones_disciplinarias` conserva el historial completo
+
+#### Asignación por admin (RRHH > Mis reconocimientos)
+- Panel "Gestión del mes": selector de empleado + grid de 12 emblemas con toggle ON/OFF
+- Toggle ON → INSERT en `acciones_disciplinarias` con `tipo='reconocimiento'`
+- Toggle OFF → DELETE del registro del mes (o todos, para Años de servicio)
+- Empleados no-admin solo ven sus propios emblemas
+
+#### Emblem.jsx
+```jsx
+<Emblem
+  shape="sunburst"    // medallion | sunburst | hexagon | shield
+  glyph="star"        // star clock trophy team flask bulb laurel heart target sun shield gear
+  palette="gold"      // gold (Honor) | steel (Distinción) | teal (Mérito) | lock (Bloqueado)
+  ribbon={true}
+  size={92}
+/>
+```
+
+### 6.5 Foto de perfil
+- Bucket privado: `rrhh-fotos` — path: `empleados/{id}/foto.{ext}`
+- Políticas storage: SELECT + INSERT + DELETE + UPDATE para el propio empleado o admin/auditor
+- Al actualizar: se eliminan versiones previas (jpg/jpeg/png/webp) y se sube la nueva
+- RPC `rpc_actualizar_mi_perfil` actualiza `foto_path` en tabla `empleados`
+
+---
+
+## 7. Sidebar acordeón
+
+| Grupo | Items visibles |
+|-------|----------------|
+| Bodega | Inventario, Alertas, Pedidos |
+| Caja / Auditoría | Caja del día, Historial |
+| Compras | Compras |
+| Finanzas | Gastos Fijos, Análisis Financiero |
+| Ventas | IGSS Gomera, Empresas |
+| Recursos Humanos | Recursos Humanos, Usuarios |
+
+- Solo el grupo de la vista activa queda abierto al cargar
+- `activeGroupKey` calculado desde `view` actual; `useEffect` abre el grupo al navegar
+- Badge en cabecera del grupo cuando está colapsado
+- Grupos sin items visibles para el rol no se renderizan
+
+---
+
+## 8. Electron — IPC Handlers
 
 | Handler | Descripción |
 |---------|-------------|
@@ -213,7 +334,7 @@ WITH CHECK (
 | `save-xlsx` | Diálogo guardar Excel (recibe base64) |
 | `open-file` | Diálogo abrir CSV |
 | `create-user` | Supabase Admin API — crear usuario |
-| `update-user` | Actualizar datos de usuario |
+| `update-user` | Actualizar datos de usuario (rol, sede, permisos, nombre) |
 | `reset-password` | Resetear contraseña por userId |
 | `disable-user` | Ban 876600h + activo=false |
 | `enable-user` | Quitar ban + activo=true |
@@ -224,467 +345,125 @@ WITH CHECK (
 ```
 VITE_SUPABASE_URL=https://xxxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_KEY=eyJ...    ← SOLO proceso principal
+SUPABASE_SERVICE_KEY=eyJ...    — SOLO proceso principal
 ```
 
 ---
 
-## 7. Sistema de diseño (shared/ui.jsx)
+## 9. Sistema de diseño (shared/ui.jsx)
 
 ### Tokens de color
 ```js
-T.teal / T.tealDk / T.tealXL   // Verde teal — color primario
-T.ok / T.okBg                   // Verde — OK
-T.warn / T.warnBg               // Naranja — precaución
-T.crit / T.critBg               // Rojo — crítico
-T.out / T.outBg                 // Gris — agotado
-T.hi / T.mid / T.lo             // Escala de texto (alta / media / baja)
-T.surface / T.canvas / T.border // Fondos y bordes
+T.teal / T.tealDk / T.tealXL / T.tealL  // Verde teal — color primario
+T.ok / T.okBg                             // Verde — OK
+T.warn / T.warnBg                         // Naranja — precaución
+T.crit / T.critBg                         // Rojo — crítico
+T.hi / T.mid / T.lo                       // Escala de texto
+T.surface / T.canvas / T.border           // Fondos y bordes
 ```
 
-Todos los tokens son `var(--css-variable)` — compatibles con dark/light mode automáticamente.
+### Componentes disponibles
+`Btn`, `IconBtn`, `Modal`, `Field`, `TInput`, `TSelect`, `StatCard`, `fmtQ`
 
-### Componentes
-`Btn`, `IconBtn`, `Modal`, `Field`, `TInput`, `TSelect`, `StatCard`, `fmtQ` (formatea quetzales)
-
-### Íconos SVG inline (sin dependencia externa)
+### Íconos SVG inline
 `Home, Layers, Box, Bell, Cart, Activity, DollarSign, History, Receipt, Users, Wallet, TrendingUp, BarChart, Map, Calendar, Check, XCircle, Edit, Trash, Plus, Download, Upload, Search, ChevronDown, Sliders, AlertTriangle, Package, Clock, X, ArrowRight, Code`
 
 ---
 
-## 8. Migraciones SQL ejecutadas
+## 10. Migraciones SQL
 
 | Archivo | Descripción | Estado |
 |---------|-------------|--------|
-| `20260611_modulo_caja.sql` | Tablas caja, RLS, multi-tenant | ✅ |
-| `20260611_caja_realtime.sql` | Realtime en tablas de caja | ✅ |
-| `20260611_profiles_auditor.sql` | Rol auditor, RLS profiles | ✅ |
-| `20260611_fix_trigger_create_user.sql` | Fix trigger creación de perfil | ✅ |
-| `20260611_modulo_compras.sql` | Tablas compras, proveedores, RLS | ✅ |
-| `20260612_gastos_fijos.sql` | Tabla gastos_fijos | ✅ |
-| `20260612_gastos_fijos_v2.sql` | Columnas adicionales, gastos_fijos_pagos | ✅ |
-| `20260613_caja_rls_secretaria_tecnico.sql` | RLS caja para secretaria/tecnico | ✅ |
-| `20260613_machine_binding.sql` | Columna machine_id en profiles | ✅ |
-| `20260614_en_uso.sql` | Columna en_uso en items | ✅ |
-| `20260614_codigo_por_sede.sql` | UNIQUE(codigo, sede_id) — reemplaza unique global | ✅ |
+| `20260611_modulo_caja.sql` | Tablas caja, RLS, multi-tenant | ✓ |
+| `20260611_caja_realtime.sql` | Realtime en tablas de caja | ✓ |
+| `20260611_profiles_auditor.sql` | Rol auditor, RLS profiles | ✓ |
+| `20260611_fix_trigger_create_user.sql` | Fix trigger creación de perfil | ✓ |
+| `20260611_modulo_compras.sql` | Tablas compras, proveedores, RLS | ✓ |
+| `20260612_gastos_fijos.sql` | Tabla gastos_fijos | ✓ |
+| `20260612_gastos_fijos_v2.sql` | Columnas adicionales, gastos_fijos_pagos | ✓ |
+| `20260613_caja_rls_secretaria_tecnico.sql` | RLS caja para secretaria/tecnico | ✓ |
+| `20260613_machine_binding.sql` | Columna machine_id en profiles | ✓ |
+| `20260614_en_uso.sql` | Columna en_uso en items | ✓ |
+| `20260614_codigo_por_sede.sql` | UNIQUE(codigo, sede_id) | ✓ |
+| `20260615_rrhh_autoservicio.sql` | Tablas RRHH, RPCs autoservicio, storage policies | ✓ |
+| `20260616_asistencia.sql` | Tabla asistencia con marcajes | ✓ |
+| `20260616_asistencia_desayuno.sql` | Pasos desayuno/regreso al widget de marcaje | ✓ |
+| `20260616_ventas.sql` | Tablas ventas_igss, ventas_empresas, permisos | ✓ |
+| `20260617_storage_update_policy.sql` | Política UPDATE para buckets rrhh-fotos/documentos | ✓ |
 
 ---
 
-## 9. Exportaciones de datos
+## 11. Flujo de release (auto-actualizaciones)
 
-| Módulo | Formato | Notas |
-|--------|---------|-------|
-| Inventario | CSV | BOM + sep=, + CRLF |
-| Caja / Historial | XLSX | 3 hojas: Resumen, Gastos, Depósitos |
-| Compras | CSV | BOM + sep=, + CRLF |
-| Gastos Fijos | CSV | BOM + sep=, + CRLF |
-
----
-
-## 10. Auto-actualizaciones
-
-### Flujo de release
 ```bash
 # 1. Cambios + commit
-git add src/... electron/... && git commit -m "feat: ..."
+git add src/... && git commit -m "feat: ..."
 
 # 2. Actualizar versión en package.json
 
-# 3. Build
-npm run build         # genera dist-electron/LabStock-Setup-X.X.X.exe
+# 3. Build y publish
+$env:GH_TOKEN = "ghp_..."   # SOLO sesión PowerShell, NUNCA en archivo
+npm run release              # vite build + electron-builder --win --publish=always
+                             # Sube .exe + .exe.blockmap + latest.yml → GitHub Releases (draft)
 
-# 4. npm run release  — electron-builder publica en GitHub Releases (draft)
-#    o subir manualmente: .exe + .exe.blockmap + latest.yml
+# 4. Publicar el draft via API GitHub (el auto-updater ignora drafts)
+# electron-builder crea 2 drafts duplicados — eliminar el que solo tiene .blockmap
+# y publicar el que tiene .exe + latest.yml
 ```
 
-> ⚠️ El nombre del .exe DEBE tener guiones (`LabStock-Setup-1.6.15.exe`), no puntos.
-> ⚠️ El patch en `node_modules/app-builder-lib/.../electronGet.js` (cp fallback para rename) se pierde al hacer `npm install`. Reaplicar si es necesario.
+> ⚠️ El `GH_TOKEN` NUNCA se escribe en ningún archivo. Solo como variable de sesión PowerShell.
 
 ---
 
-## 11. Historial de versiones
+## 12. Historial de versiones
 
 | Versión | Cambios |
 |---------|---------|
 | **v1.0.0** | Sistema inicial: bodega, caja, compras, pedidos, usuarios multi-sede |
-| **v1.5.0** | Módulo Gastos Fijos + Análisis Financiero + Pantalla Inicio + Auditor + Secretaria solo lectura |
-| **v1.5.1** | Fix: instancia única (`requestSingleInstanceLock`) |
-| **v1.5.2** | Fix: `autoUpdater` no definido al abrir menú Ayuda |
+| **v1.5.0** | Gastos Fijos + Análisis Financiero + Inicio + Auditor + Secretaria solo lectura |
+| **v1.5.1** | Fix: instancia única |
+| **v1.5.2** | Fix: autoUpdater no definido al abrir menú Ayuda |
 | **v1.5.3** | Fix: CSV con CRLF para compatibilidad Excel en Windows |
-| **v1.6.7** | Fix: importar CSV con separador `;` (Excel en español) + mapeo columnas por nombre |
-| **v1.6.8** | Fix: importación multi-sede — UNIQUE(codigo, sede_id) en vez de único global |
-| **v1.6.9** | Fix: encoding Windows-1252 en CSV de Excel español (TextDecoder con fallback) |
-| **v1.6.10** | Fix: UI freeze post-importación — reemplazó `alert()` nativo con error en modal |
-| **v1.6.11** | Fix: ítems seleccionados en CartModal ilegibles en modo oscuro (`T.tealXL` en vez de `#F0FAFA`) |
-| **v1.6.12** | Fix: íconos de acción muy oscuros en tabla inventario (`T.mid` en `IconBtn`) |
-| **v1.6.13** | Feature: resetear contraseña de usuarios + habilitar/deshabilitar + mínimo 3 caracteres |
-| **v1.6.14** | Feature: admin puede eliminar pedidos del historial + SQL para limpiar tabla pedidos |
-| **v1.6.15** | Feature: muestra nota/comentario en historial de caja cuando hay sobrante, faltante o sin depósito |
+| **v1.6.7** | Fix: importar CSV con separador `;` + mapeo columnas por nombre |
+| **v1.6.8** | Fix: importación multi-sede — UNIQUE(codigo, sede_id) |
+| **v1.6.9** | Fix: encoding Windows-1252 en CSV de Excel español |
+| **v1.6.10** | Fix: UI freeze post-importación |
+| **v1.6.11** | Fix: ítems seleccionados ilegibles en modo oscuro |
+| **v1.6.12** | Fix: íconos de acción oscuros en inventario |
+| **v1.6.13** | Feature: resetear contraseña + habilitar/deshabilitar usuarios |
+| **v1.6.14** | Feature: admin puede eliminar pedidos del historial |
+| **v1.6.15** | Feature: nota en historial de caja (sobrante, faltante, sin depósito) |
+| **v1.7.0** | Feature: módulo Ventas (IGSS Gomera + Empresas) con permisos granulares; Administración → Finanzas; Usuarios movido a RRHH |
+| **v1.7.1** | Feature: sidebar acordeón; MarcajeWidget rediseñado; emblemas SVG reconocimientos; RRHH > Mis reconocimientos con asignación admin; DisciplinaTab sin reconocimientos; fix secretaria → ventas IGSS; fix user-select en Electron |
+| **v1.7.2** | Fix: foto de perfil fallaba al reubicar (política UPDATE faltante en storage); storage.js borra versión previa antes de insertar |
 
 ---
 
-## 12. Notas técnicas clave
+## 13. Notas técnicas clave
 
-1. **Upsert con NULL**: `NULL != NULL` en PostgreSQL — items sin `codigo` siempre hacen INSERT (no upsert). La constraint `UNIQUE(codigo, sede_id)` ignora filas con `codigo IS NULL`.
-
-2. **RLS**: Siempre subquery inline (`SELECT rol FROM profiles WHERE id = auth.uid()`). No usar `auth_role()`.
-
+1. **Upsert con NULL**: `NULL != NULL` en PostgreSQL — `UNIQUE(codigo, sede_id)` ignora filas con `codigo IS NULL`.
+2. **RLS**: Siempre subquery inline. No usar `auth_role()`.
 3. **`CREATE POLICY IF NOT EXISTS`** no existe. Usar `DROP POLICY IF EXISTS` + `CREATE POLICY`.
-
-4. **Creación de usuarios**: Solo desde proceso principal con `SUPABASE_SERVICE_KEY` vía IPC. El trigger de Supabase crea el perfil base; el handler IPC complementa con sede, rol y permisos.
-
-5. **Realtime**: Canales suscritos por sede para evitar datos cruzados.
-
-6. **export .xlsx vía IPC**: Los datos se pasan como base64 para evitar límites de tamaño en IPC de Electron.
-
-7. **Machine binding**: `node-machine-id` vincula cada usuario a un dispositivo. Admin puede resetear el binding por usuario.
-
----
-
-## 13. Pendientes técnicos
-
-- [ ] Firma de código del .exe (certificate) — elimina advertencia SmartScreen
-- [ ] Exclusión permanente de Windows Defender para la carpeta del proyecto (evita EPERM en builds)
-- [ ] Agregar `gh` CLI para automatizar releases: `winget install GitHub.cli`
+4. **Creación de usuarios**: Solo desde proceso principal con `SUPABASE_SERVICE_KEY` vía IPC.
+5. **Realtime**: Canales suscritos por sede.
+6. **Export .xlsx**: Datos en base64 vía IPC para evitar límites de tamaño.
+7. **Machine binding**: `node-machine-id` vincula usuario a dispositivo. Admin puede resetear.
+8. **Storage firmado**: URLs firmadas con TTL 1 hora. Buckets privados.
+9. **Reconocimientos mensuales**: Reset lógico por filtro de fecha en query, no se borran datos. "Años de servicio" no tiene filtro de fecha.
+10. **Sidebar acordeón**: `activeGroupKey` calculado desde `view`; `useEffect([activeGroupKey])` abre el grupo al navegar.
 
 ---
 
-## 14. Arquitectura — Módulo Recursos Humanos (RRHH)
+## 14. Pendientes técnicos
 
-### Objetivo
-Gestión de personal del laboratorio: expedientes de empleados, asistencia, nómina quincenal/mensual con cálculos según la ley laboral de Guatemala, y control de prestaciones (Bono 14, Aguinaldo, IGSS).
-
-### Acceso por rol
-| Rol | Acceso |
-|-----|--------|
-| admin | Completo — ver, crear, editar, aprobar nómina |
-| auditor | Solo lectura — expedientes y reportes de nómina |
-| tecnico / secretaria | Sin acceso |
-
-### Pantalla raíz
-`src/features/rrhh/RRHHScreen.jsx` con 4 tabs:
-1. **Empleados** — expedientes
-2. **Asistencia** — registro diario
-3. **Nómina** — generación y pago
-4. **Prestaciones** — Bono 14, Aguinaldo, IGSS
+- [ ] Firma de código del .exe — elimina advertencia SmartScreen
+- [ ] Exclusión permanente de Windows Defender para la carpeta del proyecto
+- [ ] Instalar `gh` CLI: `winget install GitHub.cli`
+- [ ] Nómina completa (estructura SQL lista, falta UI)
+- [ ] Prestaciones (Bono 14, Aguinaldo — estructura SQL lista, falta UI)
+- [ ] Export de reconocimientos (PDF/imagen con emblemas del empleado)
+- [ ] Asignación de reconocimientos desde EmpleadosTab (acceso directo admin)
 
 ---
 
-### 14.1 Tablas SQL
-
-#### `cargos`
-```sql
-CREATE TABLE cargos (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organizacion_id  uuid NOT NULL REFERENCES organizaciones(id),
-  nombre           text NOT NULL,          -- "Técnico de Laboratorio", "Recepcionista"
-  departamento     text,
-  activo           boolean NOT NULL DEFAULT true,
-  created_at       timestamptz DEFAULT now()
-);
-```
-
-#### `empleados`
-```sql
-CREATE TABLE empleados (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organizacion_id  uuid NOT NULL REFERENCES organizaciones(id),
-  sede_id          uuid NOT NULL REFERENCES sedes(id),
-  cargo_id         uuid REFERENCES cargos(id),
-
-  -- Datos personales
-  nombre           text NOT NULL,
-  apellido         text NOT NULL,
-  dpi              text,                   -- Documento Personal de Identificación (Guatemala)
-  nit              text,
-  fecha_nacimiento date,
-  telefono         text,
-  correo           text,
-
-  -- Datos laborales
-  fecha_ingreso    date NOT NULL DEFAULT current_date,
-  tipo_contrato    text NOT NULL DEFAULT 'tiempo_completo',
-                   -- tiempo_completo | medio_tiempo | temporal
-  salario_base     numeric(10,2) NOT NULL, -- En quetzales (GTQ)
-  activo           boolean NOT NULL DEFAULT true,
-  fecha_baja       date,
-  motivo_baja      text,
-
-  created_at       timestamptz DEFAULT now(),
-  updated_at       timestamptz DEFAULT now()
-);
-
-CREATE INDEX idx_empleados_org ON empleados(organizacion_id, activo);
-CREATE INDEX idx_empleados_sede ON empleados(sede_id, activo);
-```
-
-#### `asistencia`
-```sql
-CREATE TABLE asistencia (
-  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  empleado_id    uuid NOT NULL REFERENCES empleados(id),
-  fecha          date NOT NULL,
-  hora_entrada   time,
-  hora_salida    time,
-  tipo           text NOT NULL DEFAULT 'normal',
-                 -- normal | permiso_con_goce | permiso_sin_goce | vacaciones | ausente | feriado
-  horas_extra    numeric(4,2) DEFAULT 0,
-  nota           text,
-  registrado_por uuid REFERENCES profiles(id),
-  created_at     timestamptz DEFAULT now(),
-
-  UNIQUE (empleado_id, fecha)
-);
-```
-
-#### `nomina` (cabecera del período)
-```sql
-CREATE TABLE nomina (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organizacion_id  uuid NOT NULL REFERENCES organizaciones(id),
-  sede_id          uuid REFERENCES sedes(id),    -- NULL = todas las sedes
-
-  -- Período
-  tipo_periodo     text NOT NULL DEFAULT 'mensual',  -- mensual | quincenal
-  fecha_inicio     date NOT NULL,
-  fecha_fin        date NOT NULL,
-  periodo_label    text NOT NULL,                -- "Junio 2026" | "2026-06 Q1"
-
-  -- Estado
-  estado           text NOT NULL DEFAULT 'borrador',
-                   -- borrador | aprobada | pagada
-  aprobado_por     uuid REFERENCES profiles(id),
-  fecha_aprobacion timestamptz,
-  fecha_pago       date,
-
-  notas            text,
-  created_by       uuid REFERENCES profiles(id),
-  created_at       timestamptz DEFAULT now()
-);
-```
-
-#### `nomina_items` (línea por empleado)
-```sql
-CREATE TABLE nomina_items (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nomina_id        uuid NOT NULL REFERENCES nomina(id) ON DELETE CASCADE,
-  empleado_id      uuid NOT NULL REFERENCES empleados(id),
-
-  -- Devengados
-  salario_base          numeric(10,2) NOT NULL,
-  dias_trabajados       numeric(4,1)  NOT NULL DEFAULT 30,
-  salario_proporcional  numeric(10,2) NOT NULL,  -- base * (dias/30)
-  horas_extra           numeric(4,2)  DEFAULT 0,
-  valor_horas_extra     numeric(10,2) DEFAULT 0,
-  bonificacion_incentivo numeric(10,2) DEFAULT 250, -- Q250 fijo por ley (Decreto 78-89)
-  otros_ingresos        numeric(10,2) DEFAULT 0,
-  total_devengado       numeric(10,2) NOT NULL,
-
-  -- Deducciones
-  deduccion_igss        numeric(10,2) NOT NULL,  -- 4.83% del salario base
-  deduccion_isr         numeric(10,2) DEFAULT 0, -- ISR si aplica
-  otras_deducciones     numeric(10,2) DEFAULT 0,
-  total_descuentos      numeric(10,2) NOT NULL,
-
-  -- Neto
-  total_neto            numeric(10,2) NOT NULL,
-
-  -- Pago
-  estado                text NOT NULL DEFAULT 'pendiente',  -- pendiente | pagado
-  metodo_pago           text,  -- efectivo | transferencia | cheque
-  numero_cuenta         text,
-  fecha_pago_efectivo   date,
-
-  UNIQUE (nomina_id, empleado_id)
-);
-```
-
-#### `prestaciones` (Bono 14, Aguinaldo, IGSS patronal)
-```sql
-CREATE TABLE prestaciones (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  empleado_id      uuid NOT NULL REFERENCES empleados(id),
-  organizacion_id  uuid NOT NULL REFERENCES organizaciones(id),
-  anio             integer NOT NULL,
-  tipo             text NOT NULL,
-                   -- bono14 | aguinaldo | igss_patronal | indemnizacion | vacaciones_pagadas
-
-  -- Cálculo
-  base_calculo     numeric(10,2),  -- salario promedio del período
-  monto_calculado  numeric(10,2),
-  monto_pagado     numeric(10,2),
-
-  -- Estado
-  estado           text NOT NULL DEFAULT 'pendiente',
-  fecha_pago       date,
-  comprobante      text,
-  notas            text,
-
-  created_at       timestamptz DEFAULT now(),
-
-  UNIQUE (empleado_id, anio, tipo)
-);
-```
-
-#### `vacaciones_permisos`
-```sql
-CREATE TABLE vacaciones_permisos (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  empleado_id      uuid NOT NULL REFERENCES empleados(id),
-  tipo             text NOT NULL,
-                   -- vacaciones | permiso_con_goce | permiso_sin_goce | licencia_medica
-  fecha_inicio     date NOT NULL,
-  fecha_fin        date NOT NULL,
-  dias_habiles     integer NOT NULL,
-  motivo           text,
-
-  -- Aprobación
-  estado           text NOT NULL DEFAULT 'solicitado',  -- solicitado | aprobado | rechazado
-  aprobado_por     uuid REFERENCES profiles(id),
-  fecha_aprobacion timestamptz,
-  nota_aprobacion  text,
-
-  created_at       timestamptz DEFAULT now()
-);
-```
-
----
-
-### 14.2 Lógica de negocio Guatemala
-
-```js
-// src/features/rrhh/lib/calcNomina.js
-
-const IGSS_EMPLEADO    = 0.0483;  // 4.83% — Decreto 295 IGSS
-const IGSS_PATRONAL    = 0.1267;  // 12.67%
-const BONIF_INCENTIVO  = 250;     // Q250/mes fijo — Decreto 78-89
-
-export function calcularLineaNomina({ salarioBase, diasTrabajados = 30, horasExtra = 0 }) {
-  const diasMes          = 30;
-  const salarioProp      = (salarioBase / diasMes) * diasTrabajados;
-  const valorHoraExtra   = (salarioBase / diasMes / 8) * 1.5 * horasExtra;
-  const totalDevengado   = salarioProp + valorHoraExtra + BONIF_INCENTIVO;
-  const deduccionIGSS    = salarioBase * IGSS_EMPLEADO;  // IGSS se calcula sobre salario base
-  const totalDescuentos  = deduccionIGSS;
-  const totalNeto        = totalDevengado - totalDescuentos;
-
-  return {
-    salarioProp: round2(salarioProp),
-    valorHorasExtra: round2(valorHoraExtra),
-    bonificacionIncentivo: BONIF_INCENTIVO,
-    totalDevengado: round2(totalDevengado),
-    deduccionIGSS: round2(deduccionIGSS),
-    igssPatronal: round2(salarioBase * IGSS_PATRONAL),   // costo del empleador (no se descuenta)
-    totalDescuentos: round2(totalDescuentos),
-    totalNeto: round2(totalNeto),
-  };
-}
-
-// Bono 14: 1 mes de salario pagado en julio (proporcional si < 1 año)
-export function calcularBono14(salarioBase, mesesTrabajados) {
-  return round2((salarioBase / 12) * Math.min(mesesTrabajados, 12));
-}
-
-// Aguinaldo: 1 mes de salario pagado en diciembre (proporcional)
-export function calcularAguinaldo(salarioBase, mesesTrabajados) {
-  return round2((salarioBase / 12) * Math.min(mesesTrabajados, 12));
-}
-
-// Vacaciones: 15 días hábiles por año (después de 150 días trabajados) — Código de Trabajo Guatemala
-export function calcularVacaciones(salarioBase, diasTrabajados) {
-  if (diasTrabajados < 150) return 0;
-  const diasVac = Math.floor((diasTrabajados / 365) * 15);
-  return round2((salarioBase / 30) * diasVac);
-}
-
-const round2 = n => Math.round(n * 100) / 100;
-```
-
----
-
-### 14.3 RLS
-
-```sql
--- empleados: admin y auditor de la organización pueden leer
-CREATE POLICY "rrhh_empleados_select" ON empleados
-  FOR SELECT USING (
-    organizacion_id = auth_org_id()
-    AND (SELECT rol FROM profiles WHERE id = auth.uid()) IN ('admin', 'auditor')
-  );
-
-CREATE POLICY "rrhh_empleados_write" ON empleados
-  FOR ALL WITH CHECK (
-    organizacion_id = auth_org_id()
-    AND (SELECT rol FROM profiles WHERE id = auth.uid()) = 'admin'
-  );
-
--- Misma lógica para nomina, nomina_items, prestaciones, asistencia, vacaciones_permisos
-```
-
----
-
-### 14.4 Pantallas (componentes)
-
-#### `EmpleadosTab`
-- Tabla con búsqueda/filtro por sede y estado
-- Modal alta: datos personales + datos laborales + cargo
-- Modal editar: todos los campos + dar de baja con motivo
-- Badge de antigüedad (calculada desde `fecha_ingreso`)
-
-#### `AsistenciaTab`
-- Vista semana/mes por empleado o por sede
-- Registro rápido: fila por empleado, entrada/salida o tipo especial
-- Resumen mensual: días normales, permisos, ausencias, horas extra
-
-#### `NominaTab`
-- Botón "Generar nómina" → selecciona período y sede
-- Auto-llena líneas con empleados activos y calcula automáticamente
-- Tabla editable: ajustar días trabajados, horas extra, otros ingresos/descuentos
-- Estados: Borrador → Aprobar (admin) → Marcar como pagada
-- Exportar a Excel (.xlsx): columnas nombre, cargo, devengado, IGSS, ISR, neto, método pago
-- Costo total del período: suma netos + IGSS patronal de todos los empleados
-
-#### `PrestacionesTab`
-- Tabs internos: Bono 14 / Aguinaldo / IGSS / Vacaciones
-- Lista de empleados con monto calculado y estado de pago
-- Botón "Generar prestaciones del año" — calcula para todos los empleados activos
-- Marcar como pagado con fecha y comprobante
-
----
-
-### 14.5 Integración con módulos existentes
-
-- **Análisis Financiero**: incluir costo de nómina como egreso mensual
-- **Sidebar**: nueva entrada "Recursos Humanos" con ícono `Users` — visible solo para admin y auditor
-- **InicioScreen**: alerta admin cuando haya nómina en estado `borrador` ya vencida o prestaciones pendientes de pago en el mes actual
-
----
-
-### 14.6 Migración SQL
-
-Archivo: `supabase/migrations/20260615_modulo_rrhh.sql`
-
-```sql
-BEGIN;
-
--- Habilitar RLS en todas las tablas RRHH
-ALTER TABLE cargos               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE empleados            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE asistencia           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nomina               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE nomina_items         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE prestaciones         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vacaciones_permisos  ENABLE ROW LEVEL SECURITY;
-
--- Habilitar realtime en empleados y nomina (para actualizaciones en tiempo real)
-ALTER PUBLICATION supabase_realtime ADD TABLE empleados;
-ALTER PUBLICATION supabase_realtime ADD TABLE nomina;
-
-COMMIT;
-```
-
-> Ejecutar **después** de crear las tablas en el SQL Editor de Supabase.
-
----
-
-*Documento actualizado el 15 de junio de 2026. Desarrollado por **Teloxis**.*
+*Documento actualizado el 17 de junio de 2026. Desarrollado por **Teloxis**.*
