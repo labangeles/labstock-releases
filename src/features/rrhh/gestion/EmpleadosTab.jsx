@@ -3,20 +3,31 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { T, Btn, TInput, TSelect, Field, IconBtn, Ico } from '../../../shared/ui';
 import { useAuth } from '../../../contexts/AuthContext';
+import Emblem from '../../../components/Emblem';
+import { RECONOCIMIENTOS } from '../../../components/Reconocimientos';
 
 const SEL = { value: '', label: 'Sin cargo' };
 
+const HOY = new Date().toISOString().split('T')[0];
+const MES_DESDE = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+})();
+const MES_HASTA = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0];
+
 export default function EmpleadosTab() {
   const { profile } = useAuth();
-  const [empleados, setEmpleados] = useState([]);
-  const [cargos,    setCargos]    = useState([]);
-  const [profiles,  setProfiles]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [busqueda,  setBusqueda]  = useState('');
-  const [editando,  setEditando]  = useState(null);
-  const [edits,     setEdits]     = useState({});
-  const [guardando, setGuardando] = useState(false);
-  const [msg,       setMsg]       = useState(null);
+  const [empleados,      setEmpleados]      = useState([]);
+  const [cargos,         setCargos]         = useState([]);
+  const [profiles,       setProfiles]       = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [busqueda,       setBusqueda]       = useState('');
+  const [editando,       setEditando]       = useState(null);
+  const [edits,          setEdits]          = useState({});
+  const [guardando,      setGuardando]      = useState(false);
+  const [msg,            setMsg]            = useState(null);
+  const [empRecons,      setEmpRecons]      = useState(new Set());
+  const [togglingRecon,  setTogglingRecon]  = useState(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -46,29 +57,80 @@ export default function EmpleadosTab() {
 
   const CARGO_OPC = [SEL, ...(cargos.map((c) => ({ value: c.id, label: c.nombre })))];
 
-  const iniciarEdit = (emp) => {
+  const cargarEmpRecons = useCallback(async (empId) => {
+    const [{ data: monthly }, { data: permanent }] = await Promise.all([
+      supabase.from('acciones_disciplinarias')
+        .select('asunto')
+        .eq('empleado_id', empId)
+        .eq('tipo', 'reconocimiento')
+        .neq('asunto', 'Años de servicio')
+        .gte('fecha', MES_DESDE)
+        .lte('fecha', MES_HASTA),
+      supabase.from('acciones_disciplinarias')
+        .select('asunto')
+        .eq('empleado_id', empId)
+        .eq('tipo', 'reconocimiento')
+        .eq('asunto', 'Años de servicio'),
+    ]);
+    const titles = new Set([...(monthly || []), ...(permanent || [])].map(r => r.asunto));
+    setEmpRecons(titles);
+  }, []);
+
+  const iniciarEdit = async (emp) => {
     setEditando(emp.id);
     setEdits({ cargo_id: emp.cargo_id || '', fecha_ingreso: emp.fecha_ingreso || '', profile_id: emp.profile_id || '' });
     setMsg(null);
+    setEmpRecons(new Set());
+    await cargarEmpRecons(emp.id);
   };
 
-  const cancelar = () => { setEditando(null); setEdits({}); };
+  const cancelar = () => { setEditando(null); setEdits({}); setEmpRecons(new Set()); };
 
   const guardar = async (emp) => {
     setGuardando(true); setMsg(null);
     const { error } = await supabase.from('empleados').update({
-      cargo_id:     edits.cargo_id     || null,
+      cargo_id:      edits.cargo_id     || null,
       fecha_ingreso: edits.fecha_ingreso || null,
-      profile_id:   edits.profile_id   || null,
+      profile_id:    edits.profile_id   || null,
     }).eq('id', emp.id);
     if (error) setMsg({ id: emp.id, txt: error.message });
-    else { setEditando(null); setEdits({}); cargar(); }
+    else { setEditando(null); setEdits({}); setEmpRecons(new Set()); cargar(); }
     setGuardando(false);
   };
 
   const toggleActivo = async (emp) => {
     await supabase.from('empleados').update({ activo: !emp.activo }).eq('id', emp.id);
     cargar();
+  };
+
+  const toggleRecon = async (cat) => {
+    if (togglingRecon || !editando) return;
+    setTogglingRecon(cat.id);
+    const isPermanent = cat.title === 'Años de servicio';
+    const isEarned = empRecons.has(cat.title);
+
+    if (isEarned) {
+      let q = supabase.from('acciones_disciplinarias')
+        .delete()
+        .eq('empleado_id', editando)
+        .eq('tipo', 'reconocimiento')
+        .eq('asunto', cat.title);
+      if (!isPermanent) q = q.gte('fecha', MES_DESDE).lte('fecha', MES_HASTA);
+      await q;
+    } else {
+      await supabase.from('acciones_disciplinarias').insert({
+        empleado_id:     editando,
+        organizacion_id: profile.organizacion_id,
+        tipo:            'reconocimiento',
+        gravedad:        'leve',
+        fecha:           HOY,
+        asunto:          cat.title,
+        descripcion:     cat.desc,
+        emitido_por:     profile.id,
+      });
+    }
+    await cargarEmpRecons(editando);
+    setTogglingRecon(null);
   };
 
   const filtrados = empleados.filter((e) => {
@@ -138,7 +200,7 @@ export default function EmpleadosTab() {
                     {emp.activo ? 'Activo' : 'Inactivo'}
                   </span>
                   {!enEdit && (
-                    <IconBtn icon={<Ico.Edit s={14}/>} onClick={() => iniciarEdit(emp)} title="Editar cargo y fecha" />
+                    <IconBtn icon={<Ico.Edit s={14}/>} onClick={() => iniciarEdit(emp)} title="Editar" />
                   )}
                   <Btn variant={emp.activo ? 'danger' : 'secondary'} size="sm"
                     onClick={() => toggleActivo(emp)}>
@@ -149,45 +211,95 @@ export default function EmpleadosTab() {
 
               {/* Panel de edición inline */}
               {enEdit && (
-                <div style={{ marginTop: 12, display: 'grid',
-                              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                              gap: 12, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
-                  <Field label="Cargo">
-                    <TSelect
-                      value={edits.cargo_id}
-                      onChange={(e) => setEdits((d) => ({ ...d, cargo_id: e?.target ? e.target.value : e }))}
-                      options={CARGO_OPC}
-                    />
-                  </Field>
-                  <Field label="Fecha de ingreso">
-                    <TInput
-                      type="date"
-                      value={edits.fecha_ingreso}
-                      onChange={(e) => setEdits((d) => ({ ...d, fecha_ingreso: e?.target ? e.target.value : e }))}
-                    />
-                  </Field>
-                  <Field label="Usuario vinculado" hint="Para activar marcaje de asistencia">
-                    <TSelect
-                      value={edits.profile_id}
-                      onChange={(e) => setEdits((d) => ({ ...d, profile_id: e?.target ? e.target.value : e }))}
-                      options={[
-                        { value: '', label: '— Sin vincular —' },
-                        ...profiles.map(p => ({
-                          value: p.id,
-                          label: `${p.nombre} (${p.codigo} · ${p.rol})`,
-                        })),
-                      ]}
-                    />
-                  </Field>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: 1 }}>
-                    <Btn onClick={() => guardar(emp)} disabled={guardando}>
-                      {guardando ? 'Guardando…' : 'Guardar'}
-                    </Btn>
-                    <Btn variant="secondary" onClick={cancelar} disabled={guardando}>Cancelar</Btn>
+                <div style={{ marginTop: 12, borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
+                  {/* Datos laborales */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                    <Field label="Cargo">
+                      <TSelect
+                        value={edits.cargo_id}
+                        onChange={(e) => setEdits((d) => ({ ...d, cargo_id: e?.target ? e.target.value : e }))}
+                        options={CARGO_OPC}
+                      />
+                    </Field>
+                    <Field label="Fecha de ingreso">
+                      <TInput
+                        type="date"
+                        value={edits.fecha_ingreso}
+                        onChange={(e) => setEdits((d) => ({ ...d, fecha_ingreso: e?.target ? e.target.value : e }))}
+                      />
+                    </Field>
+                    <Field label="Usuario vinculado" hint="Para activar marcaje de asistencia">
+                      <TSelect
+                        value={edits.profile_id}
+                        onChange={(e) => setEdits((d) => ({ ...d, profile_id: e?.target ? e.target.value : e }))}
+                        options={[
+                          { value: '', label: '— Sin vincular —' },
+                          ...profiles.map(p => ({
+                            value: p.id,
+                            label: `${p.nombre} (${p.codigo} · ${p.rol})`,
+                          })),
+                        ]}
+                      />
+                    </Field>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', paddingBottom: 1 }}>
+                      <Btn onClick={() => guardar(emp)} disabled={guardando}>
+                        {guardando ? 'Guardando…' : 'Guardar'}
+                      </Btn>
+                      <Btn variant="secondary" onClick={cancelar} disabled={guardando}>Cancelar</Btn>
+                    </div>
+                    {msg?.id === emp.id && (
+                      <div style={{ color: T.crit, fontSize: 13, gridColumn: '1 / -1' }}>{msg.txt}</div>
+                    )}
                   </div>
-                  {msg?.id === emp.id && (
-                    <div style={{ color: T.crit, fontSize: 13, gridColumn: '1 / -1' }}>{msg.txt}</div>
-                  )}
+
+                  {/* Reconocimientos del mes */}
+                  <div style={{ marginTop: 18, borderTop: `1px dashed ${T.border}`, paddingTop: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: T.lo,
+                      letterSpacing: '0.09em', textTransform: 'uppercase', marginBottom: 12 }}>
+                      Reconocimientos del mes — clic para asignar / quitar
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 8 }}>
+                      {RECONOCIMIENTOS.map(cat => {
+                        const earned = empRecons.has(cat.title);
+                        const toggling = togglingRecon === cat.id;
+                        return (
+                          <button key={cat.id} onClick={() => toggleRecon(cat)}
+                            disabled={toggling}
+                            title={cat.desc}
+                            style={{
+                              border: `1.5px solid ${earned ? T.teal : T.border}`,
+                              background: earned ? T.tealXL : T.canvas,
+                              borderRadius: 10, padding: '10px 6px 8px',
+                              cursor: toggling ? 'wait' : 'pointer',
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+                              transition: 'all 0.13s',
+                              opacity: toggling ? 0.55 : 1,
+                              outline: 'none',
+                            }}>
+                            <Emblem
+                              shape={cat.shape}
+                              glyph={cat.glyph}
+                              palette={earned ? cat.palette : 'lock'}
+                              ribbon={cat.ribbon}
+                              size={48}
+                            />
+                            <div style={{
+                              fontSize: 10.5, fontWeight: 600, lineHeight: 1.3, textAlign: 'center',
+                              color: earned ? T.tealDk : T.lo,
+                            }}>
+                              {cat.title}
+                            </div>
+                            {cat.id === 'antiguedad' && (
+                              <div style={{ fontSize: 9, fontWeight: 700, color: T.teal,
+                                letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                                Permanente
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
