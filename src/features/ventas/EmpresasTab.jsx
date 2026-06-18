@@ -160,7 +160,7 @@ export default function EmpresasTab() {
 
   /* Totales (solo activas) */
   const activas   = filtradas.filter(f => f.estado !== 'anulada');
-  const totalMonto = activas.reduce((s, f) => s + Number(f.pago_esperado), 0);
+  const totalMonto = activas.reduce((s, f) => s + (Number(f.pago_esperado) || 0), 0);
   const pendientes = activas.filter(f => f.estado === 'pendiente').length;
 
   /* NITs únicos para el filtro rápido */

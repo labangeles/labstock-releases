@@ -24,7 +24,7 @@ const Pendiente = ({ label }) => (
 
 const SEL_EMP = { value: '', label: 'Selecciona empleado…' };
 const SEL_REC = { value: '', label: 'Selecciona reconocimiento…' };
-const HOY = new Date().toISOString().split('T')[0];
+const HOY = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
 
 function ReconocimientosTab() {
   const { profile } = useAuth();

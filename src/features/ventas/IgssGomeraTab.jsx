@@ -180,7 +180,7 @@ export default function IgssGomeraTab() {
   /* ── Marcar como pagada con fecha/hora actual ── */
   const marcarPagada = async (f) => {
     const ahora    = new Date();
-    const fecha_pago = ahora.toISOString().split('T')[0];
+    const fecha_pago = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}-${String(ahora.getDate()).padStart(2,'0')}`;
     const hora_pago  = ahora.toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit', hour12: true });
     await supabase.from('ventas_facturas').update({
       estado:     'pagada',
@@ -230,9 +230,9 @@ export default function IgssGomeraTab() {
 
   /* ── Totales (solo activas) ── */
   const activas    = facturas.filter(f => f.estado !== 'anulada');
-  const totalBruto = activas.reduce((s, f) => s + Number(f.monto_total), 0);
-  const totalIVA   = activas.reduce((s, f) => s + Number(f.retencion_iva), 0);
-  const totalNeto  = activas.reduce((s, f) => s + Number(f.pago_esperado), 0);
+  const totalBruto = activas.reduce((s, f) => s + (Number(f.monto_total) || 0), 0);
+  const totalIVA   = activas.reduce((s, f) => s + (Number(f.retencion_iva) || 0), 0);
+  const totalNeto  = activas.reduce((s, f) => s + (Number(f.pago_esperado) || 0), 0);
   const pendientes = activas.filter(f => f.estado === 'pendiente').length;
 
   return (

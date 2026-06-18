@@ -190,6 +190,8 @@ export function MarcajeWidget({ profile }) {
     if (!profile?.id) return;
     setLoading(true);
     try {
+      const _d = new Date();
+      const fechaHoy = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
       const { data: emp } = await supabase
         .from('empleados').select('id, organizacion_id, sede_id')
         .eq('profile_id', profile.id).maybeSingle();
@@ -198,7 +200,7 @@ export function MarcajeWidget({ profile }) {
       const [{ data: hor }, { data: marks }] = await Promise.all([
         supabase.from('horarios_empleados').select('*').eq('empleado_id', emp.id).maybeSingle(),
         supabase.from('asistencia_marcajes').select('*').eq('empleado_id', emp.id)
-          .eq('fecha', new Date().toISOString().split('T')[0]).order('marcado_en'),
+          .eq('fecha', fechaHoy).order('marcado_en'),
       ]);
       setHorario(hor || HORARIO_DEF);
       setMarcajes(marks || []);
@@ -237,9 +239,11 @@ export function MarcajeWidget({ profile }) {
     setMarcando(true); setMsg(null);
     try {
       const tard = calcTardanza(nextTipo, horHoy, marcajes);
+      const hoy = new Date();
+      const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
       const { error } = await supabase.from('asistencia_marcajes').insert({
         empleado_id: empleado.id, organizacion_id: empleado.organizacion_id,
-        sede_id: empleado.sede_id, tipo: nextTipo, ...tard,
+        sede_id: empleado.sede_id, tipo: nextTipo, fecha: fechaHoy, ...tard,
       });
       if (error) throw error;
       setMsg({ ok: true, texto: '¡Marcaje guardado!' });

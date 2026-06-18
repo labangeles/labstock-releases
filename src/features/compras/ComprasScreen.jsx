@@ -22,14 +22,15 @@ const UNITS = [
 const CAT_LABEL      = Object.fromEntries(CATEGORIAS.map(c => [c.value, c.label]));
 const TIPO_DOC_LABEL = Object.fromEntries(TIPOS_DOC.map(t => [t.value, t.label]));
 
-const today   = () => new Date().toISOString().split('T')[0];
+const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today   = () => localDate();
 const fmtDate = iso => iso
   ? new Date(iso + 'T12:00:00').toLocaleDateString('es-GT', { day:'2-digit', month:'short', year:'numeric' })
   : '—';
 const addDays = (dateStr, days) => {
   const d = new Date(dateStr + 'T12:00:00');
   d.setDate(d.getDate() + (parseInt(days) || 0));
-  return d.toISOString().split('T')[0];
+  return localDate(d);
 };
 
 /* ── Badge vencimiento ───────────────────────────────── */
@@ -271,8 +272,9 @@ function LineItems({ lines, onChange, onRemove, readOnly }) {
           style={{ display:'grid', gridTemplateColumns:cols, padding:'10px 12px', alignItems:'center',
             gap:8, borderBottom:i < lines.length-1 ? `1px solid ${T.border}` : 'none',
             background: line.item_id ? T.tealXL : 'transparent' }}>
-          <div>
-            <div style={{ fontSize:13, fontWeight:500, color:T.hi }}>{line.nombre}</div>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:13, fontWeight:500, color:T.hi,
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{line.nombre}</div>
             <div style={{ fontSize:10.5, marginTop:2 }}>
               {line.item_id
                 ? <span style={{ color:T.tealDk }}>▸ Vinculado al inventario</span>
@@ -356,7 +358,7 @@ function NuevaCompraModal({ profile, sedes, onSave, onClose, onGoProveedores }) 
     if (!form.monto_total || isNaN(+form.monto_total) || +form.monto_total <= 0)
       return 'Ingresa el monto total de la factura.';
     if (lines.length === 0) return 'Agrega al menos un producto.';
-    if (form.tipo_pago === 'credito' && (!form.dias_credito || parseInt(form.dias_credito) < 1))
+    if (form.tipo_pago === 'credito' && (!form.dias_credito || isNaN(parseInt(form.dias_credito)) || parseInt(form.dias_credito) < 1))
       return 'Indica los días de crédito otorgados.';
     return null;
   };

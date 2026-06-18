@@ -34,12 +34,15 @@ const PERIODOS = [
   { id: '30d',     label: 'Últimos 30 d' },
 ];
 
+const ld = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
 function getRange(p) {
   const now   = new Date();
-  const today = now.toISOString().split('T')[0];
+  const today = ld(now);
   if (p === 'semana') {
     const d = new Date(); d.setDate(d.getDate() - 6);
-    return { start: d.toISOString().split('T')[0], end: today };
+    return { start: ld(d), end: today };
   }
   if (p === 'mes') {
     return {
@@ -50,10 +53,10 @@ function getRange(p) {
   if (p === 'mes_ant') {
     const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const e = new Date(now.getFullYear(), now.getMonth(), 0);
-    return { start: s.toISOString().split('T')[0], end: e.toISOString().split('T')[0] };
+    return { start: ld(s), end: ld(e) };
   }
   const d = new Date(); d.setDate(d.getDate() - 29);
-  return { start: d.toISOString().split('T')[0], end: today };
+  return { start: ld(d), end: today };
 }
 
 /* ── Tooltip personalizado ───────────────────────────────── */

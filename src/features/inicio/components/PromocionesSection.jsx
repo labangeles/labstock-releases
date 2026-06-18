@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../../lib/supabase';
 import { T, Btn, Field, TInput, IconBtn, Ico } from '../../../shared/ui';
 
-const HOY = () => new Date().toISOString().split('T')[0];
+const HOY = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 
 const FORM_INIT = { titulo: '', descripcion: '', precio: '', vigente_desde: HOY(), vigente_hasta: '' };
 

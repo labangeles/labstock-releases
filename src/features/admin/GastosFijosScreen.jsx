@@ -145,7 +145,7 @@ function ChecklistTab({ profile, sedes, readOnly }) {
   const openPago = ({ gasto, pago }) => {
     setPagoErr('');
     setPagoForm({
-      fecha_pago:   new Date().toISOString().split('T')[0],
+      fecha_pago:   (() => { const _d = new Date(); return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`; })(),
       monto_pagado: gasto.monto_mensual != null ? String(gasto.monto_mensual) : '',
       metodo_pago:  gasto.tipo_pago || 'efectivo',
       comprobante:  '',

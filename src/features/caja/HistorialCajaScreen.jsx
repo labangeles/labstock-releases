@@ -148,8 +148,8 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
   const canExport = isAdmin || isAuditor;
 
   // Filtros — por defecto últimos 30 días
-  const hoy = new Date().toISOString().split('T')[0];
-  const hace30 = new Date(Date.now() - 30*24*3600*1000).toISOString().split('T')[0];
+  const hoy = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+  const hace30 = (() => { const d = new Date(Date.now() - 30*24*3600*1000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
 
   const [fechaDesde, setFechaDesde] = useState(hace30);
   const [fechaHasta, setFechaHasta] = useState(hoy);

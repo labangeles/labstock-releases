@@ -1140,7 +1140,7 @@ function ActividadScreen({sedeId,isAdmin}) {
   useEffect(()=>{
     let q=supabase.from('actividad').select('*').order('created_at',{ascending:false}).limit(200);
     if(sedeId) q=q.eq('sede_id',sedeId);
-    q.then(({data})=>{setLogs(data||[]);setLoading(false);});
+    q.then(({data})=>{setLogs(data||[]);setLoading(false);}).catch(()=>setLoading(false));
   },[sedeId]);
 
   const icons={agregar:'➕',actualizar:'🔄',editar:'✏️',eliminar:'🗑️',importar:'📥',exportar:'📤'};
@@ -1228,7 +1228,7 @@ function UsuariosScreen({sedes}) {
 
   const load=()=>{
     supabase.from('profiles').select('*,sedes(nombre)').order('created_at')
-      .then(({data})=>{setUsers(data||[]);setLoading(false);});
+      .then(({data})=>{setUsers(data||[]);setLoading(false);}).catch(()=>setLoading(false));
   };
   useEffect(()=>load(),[]);
 
@@ -2611,7 +2611,8 @@ export default function App() {
 
   const handleExport=async()=>{
     const csv=itemsToCSV(items);
-    const name=`labstock-${currentSedeName||'inventario'}-${new Date().toISOString().split('T')[0]}.csv`;
+    const _nd=new Date(); const _ns=`${_nd.getFullYear()}-${String(_nd.getMonth()+1).padStart(2,'0')}-${String(_nd.getDate()).padStart(2,'0')}`;
+    const name=`labstock-${currentSedeName||'inventario'}-${_ns}.csv`;
     if(window.electronAPI?.saveFile){
       await window.electronAPI.saveFile({defaultPath:name,content:csv});
     } else {

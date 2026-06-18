@@ -171,7 +171,7 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
   const [loading,         setLoad]    = useState(true);
 
   useEffect(() => {
-    const today = now.toISOString().split('T')[0];
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const mes   = now.getMonth() + 1;
     const anio  = now.getFullYear();
 

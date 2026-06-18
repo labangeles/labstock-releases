@@ -63,7 +63,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
 
   const [modal, setModal] = useState(null);
   const [pendientes, setPendientes] = useState(0);
-  const today = new Date().toISOString().split('T')[0];
+  const today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
 
   useEffect(() => {
     if (!sedeId) return;
@@ -480,7 +480,7 @@ export function CajaScreen({ profile, isAdmin, currentSedeId, sedes }) {
       <div>
         <h1 style={{ fontSize:21, fontWeight:700, color:T.hi, margin:0 }}>Cuadre del día</h1>
         <div style={{ fontSize:12.5, color:T.lo, marginTop:4 }}>
-          {fmtFecha(new Date().toISOString().split('T')[0])} ·{' '}
+          {fmtFecha((() => { const _d = new Date(); return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`; })())} ·{' '}
           <span style={{ fontWeight:600, color:T.tealDk }}>{sedeName}</span>
         </div>
       </div>

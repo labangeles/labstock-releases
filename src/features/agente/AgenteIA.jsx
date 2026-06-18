@@ -88,11 +88,11 @@ function calcEstado(cantidad_actual, cantidad_minima) {
 }
 
 const TOOLS = {
-  async inventario_estado({ estado, sede }) {
+  async inventario_estado({ estado, sede }, _rol, _permisos, forcedSedeId) {
     let q = supabase.from('items')
       .select('codigo, nombre, categoria, cantidad_actual, cantidad_minima, unidad, sede_id')
       .eq('activo', true).limit(60);
-    const sedeId = await resolveSedeId(sede);
+    const sedeId = sede ? await resolveSedeId(sede) : (_rol === 'tecnico' ? forcedSedeId : null);
     if (sedeId) q = q.eq('sede_id', sedeId);
     const { data, error } = await q;
     if (error) return { error: error.message };
@@ -137,7 +137,8 @@ const TOOLS = {
   async cuadres_sin_cerrar({ dias = 7 }, _rol, permisos) {
     const puedeVer = _rol === 'admin' || _rol === 'auditor' || _rol === 'secretaria' || permisos?.caja === true;
     if (!puedeVer) return { error: 'Sin permiso para ver cuadres de caja.' };
-    const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
+    const _d = new Date(Date.now() - dias * 864e5);
+    const desde = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
     const { data, error } = await supabase.from('cuadres_caja')
       .select('fecha, sede_id, estado, ingreso_dia')
       .neq('estado', 'cerrado').gte('fecha', desde)
@@ -166,7 +167,7 @@ async function callGemini(contents, rol, permisos) {
   return data.parts;
 }
 
-async function runAgent(contents, rol, permisos) {
+async function runAgent(contents, rol, permisos, sedeId) {
   for (let i = 0; i < MAX_LOOPS; i++) {
     const parts = await callGemini(contents, rol, permisos);
     const call  = parts.find(p => p.functionCall);
@@ -176,7 +177,7 @@ async function runAgent(contents, rol, permisos) {
     }
     const { name, args } = call.functionCall;
     const fn     = TOOLS[name];
-    const result = fn ? await fn(args || {}, rol, permisos) : { error: `Herramienta '${name}' no existe.` };
+    const result = fn ? await fn(args || {}, rol, permisos, sedeId) : { error: `Herramienta '${name}' no existe.` };
     contents.push({ role: 'model', parts: [{ functionCall: call.functionCall }] });
     contents.push({ role: 'user',  parts: [{ functionResponse: { name, response: result } }] });
   }
@@ -217,7 +218,7 @@ export default function AgenteIA({ profile }) {
     setBusy(true);
     contentsRef.current.push({ role: 'user', parts: [{ text: q }] });
     try {
-      const answer = await runAgent(contentsRef.current, profile?.rol, profile?.permisos ?? {});
+      const answer = await runAgent(contentsRef.current, profile?.rol, profile?.permisos ?? {}, profile?.sede_id);
       contentsRef.current.push({ role: 'model', parts: [{ text: answer }] });
       setMsgs(m => [...m, { role: 'assistant', text: answer, at: new Date().toISOString() }]);
     } catch (e) {
