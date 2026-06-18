@@ -300,10 +300,16 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
 function AdminDashboard({ sedes, profile }) {
   const [selectedId, setSelectedId] = useState(null);
   const [resumen, setResumen]       = useState([]);
-  const today = new Date().toISOString().split('T')[0];
+  const today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  })();
 
   const loadResumen = useCallback(async () => {
-    const { data } = await supabase.from('v_cuadres_resumen').select('*').eq('fecha', today);
+    const { data } = await supabase
+      .from('v_cuadres_resumen')
+      .select('sede_id,sede_nombre,fecha,ingreso_dia,total_gastos,total_depositos,diferencia,estado')
+      .eq('fecha', today);
     setResumen(data || []);
   }, [today]);
 
