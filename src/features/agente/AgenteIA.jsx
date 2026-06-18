@@ -158,8 +158,11 @@ const TOOLS = {
 
 async function callGemini(contents, rol) {
   const { data, error } = await supabase.functions.invoke('agente-ia', { body: { contents, rol } });
-  if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
+  if (error) throw new Error(`Error de conexión: ${error.message}`);
+  if (!data) throw new Error('Sin respuesta del servidor.');
+  if (data.error) throw new Error(data.error);
+  if (!Array.isArray(data.parts) || data.parts.length === 0)
+    throw new Error('Formato de respuesta inesperado del servidor.');
   return data.parts;
 }
 

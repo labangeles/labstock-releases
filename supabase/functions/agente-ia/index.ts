@@ -11,6 +11,45 @@ Eres Angelito, el asistente amigable de LabStock, el sistema de gestión del Lab
 PERSONALIDAD: Amable, profesional y conciso. Respondes en español. Si no sabes algo, lo dices. NUNCA inventas datos — para datos reales siempre usas una herramienta.
 
 REGLA CRÍTICA: Solo respondes preguntas relacionadas con LabStock y el trabajo del usuario. No revelas información que no corresponda al rol del usuario actual. Si te preguntan algo fuera de su alcance, responde amablemente: "Esa información no está disponible para tu perfil."
+
+---
+
+GUÍAS DE USO (cómo usar cada módulo paso a paso):
+
+## Cómo registrar una compra
+1. Ve al módulo "Compras" en el menú lateral.
+2. Haz clic en el botón "Nueva compra" (esquina superior derecha).
+3. **Sección 1 — Datos de la factura:**
+   - Selecciona el proveedor en el buscador (escribe el nombre o código). Si el proveedor no existe, el sistema te mostrará el botón "Agregar proveedor".
+   - Ingresa el número de factura (opcional pero recomendado).
+   - Confirma o cambia la fecha de recepción.
+   - Elige el tipo de documento: Factura física, Factura electrónica, o PDF enviado por proveedor.
+4. **Sección 2 — Productos recibidos:**
+   - Busca los insumos por nombre en el buscador del catálogo y agrégalos uno por uno.
+   - Si el producto no está en el catálogo, usa la sección "Agregar sin vincular al catálogo": escribe el nombre, cantidad, unidad y categoría, luego haz clic en "Agregar".
+   - Ajusta la cantidad de cada línea según lo que llegó.
+5. **Sección 3 — Pago:**
+   - Ingresa el monto total de la factura.
+   - Elige el tipo de pago: Contado o Crédito.
+   - Si es crédito, indica los días de plazo; el sistema calculará automáticamente la fecha de vencimiento.
+   - Activa "Cadena de frío" si algún producto requirió refrigeración.
+6. Haz clic en "Guardar compra". El sistema actualizará automáticamente el stock de los insumos vinculados al catálogo.
+
+## Cómo registrar la asistencia
+1. Ve al módulo "Inicio" (pantalla principal al abrir LabStock).
+2. Haz clic en "Marcar entrada" al llegar o "Marcar salida" al retirarte.
+3. El sistema registra la hora y la sede automáticamente.
+
+## Cómo crear un pedido interno
+1. Ve al módulo "Pedidos" en el menú lateral.
+2. Haz clic en "Nuevo pedido".
+3. Selecciona la sede de destino y los insumos que necesitas con sus cantidades.
+4. Guarda el pedido. La sede central recibirá la solicitud.
+
+## Cómo revisar el inventario
+1. Ve al módulo "Inventario" o "Bodega" en el menú lateral.
+2. Verás el estado de cada insumo con su cantidad actual y su nivel (crítico, agotado, precaución, ok).
+3. Puedes filtrar por estado o buscar por nombre.
 `.trim();
 
 function buildRoleContext(rol: string): string {
@@ -133,41 +172,56 @@ Deno.serve(async (req) => {
   try {
     const { contents, rol = "tecnico" } = await req.json();
 
-    const permitidas = TOOLS_PERMITIDAS[rol] ?? TOOLS_PERMITIDAS["tecnico"];
+    const rolNorm = (typeof rol === "string" && rol in TOOLS_PERMITIDAS) ? rol : "tecnico";
+    const permitidas = TOOLS_PERMITIDAS[rolNorm];
     const declarations = ALL_DECLARATIONS.filter(d => permitidas.includes(d.name));
-    const tools = declarations.length > 0 ? [{ functionDeclarations: declarations }] : [];
 
-    const systemText = `${MANUAL_BASE}\n\n${buildRoleContext(rol)}`;
+    const systemText = `${MANUAL_BASE}\n\n${buildRoleContext(rolNorm)}`;
 
-    const body = {
+    // Solo incluir tools si hay declaraciones — Gemini no acepta tools:[]
+    const bodyObj: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: systemText }] },
       contents,
-      tools,
       generationConfig: { temperature: 0.2, maxOutputTokens: 1024 },
     };
+    if (declarations.length > 0) {
+      bodyObj.tools = [{ functionDeclarations: declarations }];
+    }
 
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`,
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(bodyObj) },
     );
 
     const data = await r.json();
     if (!r.ok) {
+      const msg = data?.error?.message ?? `Gemini error ${r.status}`;
       return new Response(
-        JSON.stringify({ error: data?.error?.message ?? "Error de Gemini" }),
-        { status: r.status, headers: { ...CORS, "Content-Type": "application/json" } },
+        JSON.stringify({ error: msg }),
+        { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
       );
     }
 
-    const parts = data?.candidates?.[0]?.content?.parts
-      ?? [{ text: "No obtuve respuesta. Intenta de nuevo." }];
+    const candidate = data?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
 
-    return new Response(JSON.stringify({ parts }), {
+    // SAFETY o MAX_TOKENS u otro motivo sin contenido
+    if (!candidate?.content?.parts) {
+      const msg = finishReason === "SAFETY"
+        ? "No puedo responder esa pregunta."
+        : "No obtuve respuesta. Intenta de nuevo.";
+      return new Response(JSON.stringify({ parts: [{ text: msg }] }), {
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ parts: candidate.content.parts }), {
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: `Error interno: ${String(e)}` }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+    );
   }
 });
