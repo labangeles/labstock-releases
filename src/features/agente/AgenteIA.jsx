@@ -101,17 +101,9 @@ const TOOLS = {
     return { total: filtrados.length, items: filtrados.slice(0, 40) };
   },
 
-  async cuadres_sin_cerrar({ dias = 7 }) {
-    const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
-    const { data, error } = await supabase.from('cuadres_caja')
-      .select('fecha, sede_id, estado, ingreso_dia')
-      .neq('estado', 'cerrado').gte('fecha', desde)
-      .order('fecha', { ascending: false }).limit(40);
-    if (error) return { error: error.message };
-    return { total: data.length, cuadres: data };
-  },
-
   async ventas_resumen_mes({ mes, anio }, rol) {
+    if (rol !== 'admin' && rol !== 'auditor')
+      return { error: 'Sin permiso para ver datos de ventas.' };
     const hoy = new Date();
     const m = mes ?? hoy.getMonth() + 1;
     const a = anio ?? hoy.getFullYear();
@@ -123,13 +115,13 @@ const TOOLS = {
       return data.reduce((s, r) => s + Number(r.monto || 0), 0);
     };
     const igss = await sumar('ventas_igss');
-    const puedeVerEmpresas = rol === 'admin' || rol === 'auditor';
-    if (!puedeVerEmpresas) return { mes: m, anio: a, igss, total: igss };
-    const empresas = await sumar('ventas_empresas');
+    const empresas = rol === 'admin' ? await sumar('ventas_empresas') : 0;
     return { mes: m, anio: a, igss, empresas, total: igss + empresas };
   },
 
-  async gastos_fijos_pendientes({ mes, anio }) {
+  async gastos_fijos_pendientes({ mes, anio }, rol) {
+    if (rol !== 'admin' && rol !== 'auditor')
+      return { error: 'Sin permiso para ver gastos fijos.' };
     const hoy = new Date();
     const m = mes ?? hoy.getMonth() + 1;
     const a = anio ?? hoy.getFullYear();
@@ -142,6 +134,18 @@ const TOOLS = {
     return { mes: m, anio: a, pendientes: (plantillas ?? []).filter(g => !pagados.has(g.id)) };
   },
 
+  async cuadres_sin_cerrar({ dias = 7 }, rol) {
+    if (rol !== 'admin' && rol !== 'auditor')
+      return { error: 'Sin permiso para ver cuadres de caja.' };
+    const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
+    const { data, error } = await supabase.from('cuadres_caja')
+      .select('fecha, sede_id, estado, ingreso_dia')
+      .neq('estado', 'cerrado').gte('fecha', desde)
+      .order('fecha', { ascending: false }).limit(40);
+    if (error) return { error: error.message };
+    return { total: data.length, cuadres: data };
+  },
+
   async pedidos_activos() {
     const { data, error } = await supabase.from('pedidos')
       .select('referencia, estado, created_at')
@@ -152,8 +156,8 @@ const TOOLS = {
   },
 };
 
-async function callGemini(contents) {
-  const { data, error } = await supabase.functions.invoke('agente-ia', { body: { contents } });
+async function callGemini(contents, rol) {
+  const { data, error } = await supabase.functions.invoke('agente-ia', { body: { contents, rol } });
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   return data.parts;
@@ -161,7 +165,7 @@ async function callGemini(contents) {
 
 async function runAgent(contents, rol) {
   for (let i = 0; i < MAX_LOOPS; i++) {
-    const parts = await callGemini(contents);
+    const parts = await callGemini(contents, rol);
     const call  = parts.find(p => p.functionCall);
     if (!call) {
       return parts.filter(p => p.text).map(p => p.text).join('\n').trim()
@@ -176,12 +180,12 @@ async function runAgent(contents, rol) {
   return 'La consulta tomó demasiados pasos. Reformula la pregunta, por favor.';
 }
 
-const SUGERENCIAS = [
-  '¿Qué reactivos están críticos?',
-  '¿Cuánto facturamos este mes?',
-  '¿Qué cuadres no se han cerrado?',
-  'Pedidos activos entre sedes',
-];
+const SUGERENCIAS_POR_ROL = {
+  admin:      ['¿Qué reactivos están críticos?', '¿Cuánto facturamos este mes?', '¿Qué cuadres no se han cerrado?', 'Pedidos activos entre sedes'],
+  auditor:    ['¿Qué reactivos están críticos?', '¿Cuánto facturamos este mes?', '¿Qué cuadres no se han cerrado?', 'Gastos fijos pendientes'],
+  tecnico:    ['¿Qué reactivos están críticos?', 'Pedidos activos de mi sede', '¿Cómo registro un pedido?', '¿Cómo marco mi asistencia?'],
+  secretaria: ['¿Qué reactivos están críticos?', 'Pedidos activos', '¿Cómo registro una compra?', '¿Cómo marco mi asistencia?'],
+};
 
 const hora = (d) =>
   new Date(d).toLocaleTimeString('es-GT', { hour: '2-digit', minute: '2-digit' });
@@ -220,6 +224,8 @@ export default function AgenteIA({ profile }) {
     }
   }
 
+  const rol = profile?.rol ?? 'tecnico';
+  const sugerencias = SUGERENCIAS_POR_ROL[rol] ?? SUGERENCIAS_POR_ROL['tecnico'];
   const hasUserMsg = msgs.some(m => m.role === 'user');
 
   /* ── FAB cerrado ── */
@@ -377,7 +383,7 @@ export default function AgenteIA({ profile }) {
           display: 'flex', flexWrap: 'wrap', gap: 7,
           padding: '0 16px 12px', background: 'var(--bg-canvas)', flexShrink: 0,
         }}>
-          {SUGERENCIAS.map(s => (
+          {sugerencias.map(s => (
             <button key={s} onClick={() => send(s)}
               style={{
                 padding: '7px 13px',
