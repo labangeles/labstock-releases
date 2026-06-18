@@ -52,47 +52,63 @@ GUÍAS DE USO (cómo usar cada módulo paso a paso):
 3. Puedes filtrar por estado o buscar por nombre.
 `.trim();
 
-function buildRoleContext(rol: string): string {
+function buildRoleContext(rol: string, permisos: Permisos): string {
+  const tieneCaja    = rol === "admin" || rol === "auditor" || rol === "secretaria" || permisos.caja === true;
+  const tieneIgss    = rol === "admin" || rol === "auditor" || permisos.ventas_igss === true;
+  const tieneEmp     = rol === "admin" || permisos.ventas_empresas === true;
+  const tieneGastos  = rol === "admin" || rol === "auditor";
+
   switch (rol) {
     case "admin":
       return `
 ROL ACTUAL: Administrador (acceso total)
-Puedes ayudar con todos los módulos: inventario (todas las sedes), caja, historial de caja, ventas, gastos fijos, pedidos, compras, RRHH, nómina, usuarios y configuración.
+Puedes ayudar con todos los módulos: inventario (todas las sedes), caja, historial de caja, ventas IGSS y empresas, gastos fijos, pedidos, compras, RRHH, nómina, usuarios y configuración.
 No hay restricciones de información para este rol.
 `.trim();
 
     case "auditor":
       return `
 ROL ACTUAL: Auditor (solo lectura)
-Puedes ayudar con: caja e historial, ventas, gastos fijos, compras, asistencia y RRHH.
+Puedes ayudar con: caja e historial, ventas IGSS, gastos fijos, compras, asistencia y RRHH.
 RESTRICCIONES:
 - Solo orientas en consulta, nunca en creación/edición/eliminación de registros.
 - NO puedes dar información sobre contraseñas, creación de usuarios ni configuración del sistema.
-- NO ejecutes herramientas que modifiquen datos.
 `.trim();
 
-    case "tecnico":
+    case "tecnico": {
+      const accesos = ["inventario y bodega de su sede", "pedidos internos", "perfil y asistencia"];
+      if (tieneCaja)   accesos.push("caja (cuadres y estado)");
+      if (tieneIgss)   accesos.push("ventas IGSS");
+      if (tieneEmp)    accesos.push("ventas empresas");
+
+      const restricciones: string[] = [];
+      if (!tieneCaja)   restricciones.push("NUNCA reveles montos de caja, ingresos del día ni diferencias de cuadre.");
+      if (!tieneIgss && !tieneEmp) restricciones.push("NUNCA reveles totales de ventas ni datos de facturación.");
+      restricciones.push("NUNCA des información de otras sedes.");
+      if (tieneGastos === false) restricciones.push("NUNCA reveles datos de gastos fijos.");
+
       return `
 ROL ACTUAL: Técnico de sede
-Puedes ayudar ÚNICAMENTE con: inventario y bodega de su propia sede, pedidos internos, su perfil y su propia asistencia.
-RESTRICCIONES ESTRICTAS — NUNCA hagas ni digas lo siguiente:
-- NUNCA reveles montos de caja, ingresos del día, diferencias de cuadre ni ningún dato financiero.
-- NUNCA reveles totales de ventas, facturación ni datos de gastos fijos.
-- NUNCA des información de otras sedes (inventario, caja, personal).
-- NUNCA uses las herramientas de cuadres_sin_cerrar, ventas_resumen_mes ni gastos_fijos_pendientes.
-- Si te preguntan algo financiero o de otras sedes, responde: "Esa información no está disponible para tu perfil."
+Este usuario tiene acceso a: ${accesos.join(", ")}.
+${restricciones.length > 0 ? "RESTRICCIONES:\n- " + restricciones.join("\n- ") : ""}
+- Si te preguntan algo fuera de su alcance, responde: "Esa información no está disponible para tu perfil."
 `.trim();
+    }
 
-    case "secretaria":
+    case "secretaria": {
+      const accesos = ["inventario (consulta)", "compras", "pedidos", "perfil y asistencia", "caja y cuadres"];
+      if (tieneIgss) accesos.push("ventas IGSS");
+      if (tieneEmp)  accesos.push("ventas empresas");
+
       return `
 ROL ACTUAL: Secretaria
-Puedes ayudar con: inventario (consulta), compras, pedidos, tu perfil y tu propia asistencia.
+Este usuario tiene acceso a: ${accesos.join(", ")}.
 RESTRICCIONES:
-- NUNCA reveles montos de caja, ingresos, diferencias de cuadre ni datos financieros detallados.
-- NUNCA reveles totales de ventas ni salarios.
-- NUNCA uses las herramientas de cuadres_sin_cerrar ni ventas_resumen_mes.
-- Si te preguntan algo fuera de tu alcance, responde: "Esa información no está disponible para tu perfil."
+- NUNCA reveles salarios ni nómina detallada.
+- NUNCA reveles datos de gastos fijos.
+- Si te preguntan algo fuera de su alcance, responde: "Esa información no está disponible para tu perfil."
 `.trim();
+    }
 
     default:
       return `
@@ -102,13 +118,42 @@ Solo puedes ayudar con preguntas generales sobre cómo usar LabStock. No tienes 
   }
 }
 
-// Herramientas disponibles por rol
-const TOOLS_PERMITIDAS: Record<string, string[]> = {
-  admin:      ["inventario_estado", "cuadres_sin_cerrar", "ventas_resumen_mes", "gastos_fijos_pendientes", "pedidos_activos"],
-  auditor:    ["inventario_estado", "cuadres_sin_cerrar", "ventas_resumen_mes", "gastos_fijos_pendientes"],
-  tecnico:    ["inventario_estado", "pedidos_activos"],
-  secretaria: ["inventario_estado", "pedidos_activos"],
-};
+// Calcula herramientas permitidas dinámicamente según rol + permisos del usuario
+interface Permisos {
+  caja?: boolean;
+  ventas_igss?: boolean;
+  ventas_empresas?: boolean;
+  bodega?: boolean;
+}
+
+function getToolsPermitidas(rol: string, permisos: Permisos): string[] {
+  const tools: string[] = ["inventario_estado"];
+
+  const esAdmin   = rol === "admin";
+  const esAuditor = rol === "auditor";
+
+  // Caja: admin, auditor, secretaria siempre, técnico solo si tiene permiso
+  if (esAdmin || esAuditor || rol === "secretaria" || permisos.caja === true) {
+    tools.push("cuadres_sin_cerrar");
+  }
+
+  // Ventas: admin, auditor, o cualquier rol con permiso ventas_igss/ventas_empresas
+  if (esAdmin || esAuditor || permisos.ventas_igss === true || permisos.ventas_empresas === true) {
+    tools.push("ventas_resumen_mes");
+  }
+
+  // Gastos fijos: solo admin y auditor
+  if (esAdmin || esAuditor) {
+    tools.push("gastos_fijos_pendientes");
+  }
+
+  // Pedidos: todos excepto auditor
+  if (!esAuditor) {
+    tools.push("pedidos_activos");
+  }
+
+  return tools;
+}
 
 const ALL_DECLARATIONS = [
   {
@@ -170,13 +215,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    const { contents, rol = "tecnico" } = await req.json();
-
-    const rolNorm = (typeof rol === "string" && rol in TOOLS_PERMITIDAS) ? rol : "tecnico";
-    const permitidas = TOOLS_PERMITIDAS[rolNorm];
+    const { contents, rol = "tecnico", permisos = {} } = await req.json();
+    const rolNorm   = (typeof rol === "string" && ["admin","auditor","tecnico","secretaria"].includes(rol)) ? rol : "tecnico";
+    const perm: Permisos = permisos ?? {};
+    const permitidas   = getToolsPermitidas(rolNorm, perm);
     const declarations = ALL_DECLARATIONS.filter(d => permitidas.includes(d.name));
 
-    const systemText = `${MANUAL_BASE}\n\n${buildRoleContext(rolNorm)}`;
+    const systemText = `${MANUAL_BASE}\n\n${buildRoleContext(rolNorm, perm)}`;
 
     // Solo incluir tools si hay declaraciones — Gemini no acepta tools:[]
     const bodyObj: Record<string, unknown> = {

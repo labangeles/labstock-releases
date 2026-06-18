@@ -101,9 +101,9 @@ const TOOLS = {
     return { total: filtrados.length, items: filtrados.slice(0, 40) };
   },
 
-  async ventas_resumen_mes({ mes, anio }, rol) {
-    if (rol !== 'admin' && rol !== 'auditor')
-      return { error: 'Sin permiso para ver datos de ventas.' };
+  async ventas_resumen_mes({ mes, anio }, _rol, permisos) {
+    const puedeVer = _rol === 'admin' || _rol === 'auditor' || permisos?.ventas_igss === true || permisos?.ventas_empresas === true;
+    if (!puedeVer) return { error: 'Sin permiso para ver datos de ventas.' };
     const hoy = new Date();
     const m = mes ?? hoy.getMonth() + 1;
     const a = anio ?? hoy.getFullYear();
@@ -114,13 +114,13 @@ const TOOLS = {
       if (error) return 0;
       return data.reduce((s, r) => s + Number(r.monto || 0), 0);
     };
-    const igss = await sumar('ventas_igss');
-    const empresas = rol === 'admin' ? await sumar('ventas_empresas') : 0;
+    const igss     = (_rol === 'admin' || _rol === 'auditor' || permisos?.ventas_igss === true)     ? await sumar('ventas_igss')     : 0;
+    const empresas = (_rol === 'admin' || _rol === 'auditor' || permisos?.ventas_empresas === true) ? await sumar('ventas_empresas') : 0;
     return { mes: m, anio: a, igss, empresas, total: igss + empresas };
   },
 
-  async gastos_fijos_pendientes({ mes, anio }, rol) {
-    if (rol !== 'admin' && rol !== 'auditor')
+  async gastos_fijos_pendientes({ mes, anio }, _rol) {
+    if (_rol !== 'admin' && _rol !== 'auditor')
       return { error: 'Sin permiso para ver gastos fijos.' };
     const hoy = new Date();
     const m = mes ?? hoy.getMonth() + 1;
@@ -134,9 +134,9 @@ const TOOLS = {
     return { mes: m, anio: a, pendientes: (plantillas ?? []).filter(g => !pagados.has(g.id)) };
   },
 
-  async cuadres_sin_cerrar({ dias = 7 }, rol) {
-    if (rol !== 'admin' && rol !== 'auditor')
-      return { error: 'Sin permiso para ver cuadres de caja.' };
+  async cuadres_sin_cerrar({ dias = 7 }, _rol, permisos) {
+    const puedeVer = _rol === 'admin' || _rol === 'auditor' || _rol === 'secretaria' || permisos?.caja === true;
+    if (!puedeVer) return { error: 'Sin permiso para ver cuadres de caja.' };
     const desde = new Date(Date.now() - dias * 864e5).toISOString().slice(0, 10);
     const { data, error } = await supabase.from('cuadres_caja')
       .select('fecha, sede_id, estado, ingreso_dia')
@@ -156,8 +156,8 @@ const TOOLS = {
   },
 };
 
-async function callGemini(contents, rol) {
-  const { data, error } = await supabase.functions.invoke('agente-ia', { body: { contents, rol } });
+async function callGemini(contents, rol, permisos) {
+  const { data, error } = await supabase.functions.invoke('agente-ia', { body: { contents, rol, permisos } });
   if (error) throw new Error(`Error de conexión: ${error.message}`);
   if (!data) throw new Error('Sin respuesta del servidor.');
   if (data.error) throw new Error(data.error);
@@ -166,9 +166,9 @@ async function callGemini(contents, rol) {
   return data.parts;
 }
 
-async function runAgent(contents, rol) {
+async function runAgent(contents, rol, permisos) {
   for (let i = 0; i < MAX_LOOPS; i++) {
-    const parts = await callGemini(contents, rol);
+    const parts = await callGemini(contents, rol, permisos);
     const call  = parts.find(p => p.functionCall);
     if (!call) {
       return parts.filter(p => p.text).map(p => p.text).join('\n').trim()
@@ -176,7 +176,7 @@ async function runAgent(contents, rol) {
     }
     const { name, args } = call.functionCall;
     const fn     = TOOLS[name];
-    const result = fn ? await fn(args || {}, rol) : { error: `Herramienta '${name}' no existe.` };
+    const result = fn ? await fn(args || {}, rol, permisos) : { error: `Herramienta '${name}' no existe.` };
     contents.push({ role: 'model', parts: [{ functionCall: call.functionCall }] });
     contents.push({ role: 'user',  parts: [{ functionResponse: { name, response: result } }] });
   }
@@ -217,7 +217,7 @@ export default function AgenteIA({ profile }) {
     setBusy(true);
     contentsRef.current.push({ role: 'user', parts: [{ text: q }] });
     try {
-      const answer = await runAgent(contentsRef.current, profile?.rol);
+      const answer = await runAgent(contentsRef.current, profile?.rol, profile?.permisos ?? {});
       contentsRef.current.push({ role: 'model', parts: [{ text: answer }] });
       setMsgs(m => [...m, { role: 'assistant', text: answer, at: new Date().toISOString() }]);
     } catch (e) {
