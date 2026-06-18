@@ -92,6 +92,7 @@ function ChecklistTab({ profile, sedes, readOnly }) {
   const [pagoModal,setPagoModal]= useState(null); // { gasto, pago }
   const [pagoForm, setPagoForm] = useState({});
   const [saving,   setSaving]   = useState(false);
+  const [pagoErr,  setPagoErr]  = useState('');
 
   const load = useCallback(async () => {
     setLoad(true);
@@ -142,9 +143,10 @@ function ChecklistTab({ profile, sedes, readOnly }) {
   useEffect(() => { load(); }, [load]);
 
   const openPago = ({ gasto, pago }) => {
+    setPagoErr('');
     setPagoForm({
       fecha_pago:   new Date().toISOString().split('T')[0],
-      monto_pagado: String(gasto.monto_mensual),
+      monto_pagado: gasto.monto_mensual != null ? String(gasto.monto_mensual) : '',
       metodo_pago:  gasto.tipo_pago || 'efectivo',
       comprobante:  '',
       notas:        '',
@@ -154,12 +156,17 @@ function ChecklistTab({ profile, sedes, readOnly }) {
 
   const confirmarPago = async () => {
     if (!pagoModal?.pago) return;
-    setSaving(true);
     const monto = parseFloat(pagoForm.monto_pagado);
+    if (isNaN(monto) || monto <= 0) {
+      setPagoErr('Ingresa el monto pagado.');
+      return;
+    }
+    setPagoErr('');
+    setSaving(true);
     await supabase.from('gastos_fijos_pagos').update({
       pagado:         true,
       fecha_pago:     pagoForm.fecha_pago || null,
-      monto_pagado:   isNaN(monto) ? pagoModal.gasto.monto_mensual : monto,
+      monto_pagado:   monto,
       metodo_pago:    pagoForm.metodo_pago,
       comprobante:    pagoForm.comprobante || null,
       notas:          pagoForm.notas || null,
@@ -183,9 +190,9 @@ function ChecklistTab({ profile, sedes, readOnly }) {
   const nPagados   = items.filter(i => i.pago?.pagado).length;
   const nPendientes = items.filter(i => !i.pago?.pagado).length;
   const totalPagado    = items.filter(i => i.pago?.pagado)
-    .reduce((s,i) => s + Number(i.pago.monto_pagado || i.gasto.monto_mensual), 0);
+    .reduce((s,i) => s + Number(i.pago.monto_pagado || 0), 0);
   const totalPendiente = items.filter(i => !i.pago?.pagado)
-    .reduce((s,i) => s + Number(i.gasto.monto_mensual), 0);
+    .reduce((s,i) => s + Number(i.gasto.monto_mensual || 0), 0);
 
   const anios = [now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1];
 
@@ -339,9 +346,15 @@ function ChecklistTab({ profile, sedes, readOnly }) {
             <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',
               gap:10,flexShrink:0,minWidth:100}}>
               <div style={{textAlign:'right'}}>
-                <div style={{fontSize:18,fontWeight:800,color:pagado?T.ok:T.hi,lineHeight:1}}>
-                  {fmtQ(gasto.monto_mensual)}
-                </div>
+                {gasto.monto_mensual != null ? (
+                  <div style={{fontSize:18,fontWeight:800,color:pagado?T.ok:T.hi,lineHeight:1}}>
+                    {fmtQ(gasto.monto_mensual)}
+                  </div>
+                ) : (
+                  <div style={{fontSize:13,fontWeight:700,color:pagado?T.ok:T.warn,lineHeight:1,fontStyle:'italic'}}>
+                    {pagado ? fmtQ(pago.monto_pagado) : 'Monto variable'}
+                  </div>
+                )}
                 <div style={{fontSize:10.5,color:T.lo,marginTop:2}}>mensual</div>
               </div>
               {!readOnly && (pagado ? (
@@ -370,10 +383,18 @@ function ChecklistTab({ profile, sedes, readOnly }) {
             <div style={{background:T.canvas,borderRadius:10,padding:'12px 16px',marginBottom:18}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                 <div>
-                  <div style={{fontSize:11,color:T.lo,marginBottom:3}}>Monto mensual configurado</div>
-                  <div style={{fontSize:20,fontWeight:800,color:T.hi}}>
-                    {fmtQ(pagoModal.gasto.monto_mensual)}
+                  <div style={{fontSize:11,color:T.lo,marginBottom:3}}>
+                    {pagoModal.gasto.monto_mensual != null ? 'Monto mensual configurado' : 'Monto variable — ingresa el monto del recibo'}
                   </div>
+                  {pagoModal.gasto.monto_mensual != null ? (
+                    <div style={{fontSize:20,fontWeight:800,color:T.hi}}>
+                      {fmtQ(pagoModal.gasto.monto_mensual)}
+                    </div>
+                  ) : (
+                    <div style={{fontSize:13,fontWeight:600,color:T.warn,fontStyle:'italic'}}>
+                      Se define al registrar
+                    </div>
+                  )}
                 </div>
                 {pagoModal.gasto.beneficiario && (
                   <div style={{textAlign:'right'}}>
@@ -397,12 +418,18 @@ function ChecklistTab({ profile, sedes, readOnly }) {
                 <TInput type="date" value={pagoForm.fecha_pago}
                   onChange={e=>setPagoForm(f=>({...f,fecha_pago:e.target.value}))}/>
               </Field>
-              <Field label="Monto pagado (Q)" hint="Si difiere del configurado">
+              <Field label="Monto pagado (Q)"
+                hint={pagoModal.gasto.monto_mensual != null ? 'Si difiere del configurado' : ''}>
                 <TInput type="number" min="0" step="0.01"
                   value={pagoForm.monto_pagado}
-                  onChange={e=>setPagoForm(f=>({...f,monto_pagado:e.target.value}))}/>
+                  placeholder={pagoModal.gasto.monto_mensual == null ? 'Ingresa el monto del recibo' : ''}
+                  onChange={e=>{ setPagoErr(''); setPagoForm(f=>({...f,monto_pagado:e.target.value})); }}/>
               </Field>
             </div>
+            {pagoErr && (
+              <div style={{background:T.critBg,borderRadius:8,padding:'8px 12px',
+                fontSize:12.5,color:T.crit,marginBottom:4}}>{pagoErr}</div>
+            )}
 
             <Sel label="Método de pago"
               value={pagoForm.metodo_pago}
@@ -443,7 +470,7 @@ function ChecklistTab({ profile, sedes, readOnly }) {
 ══════════════════════════════════════════════════════════════ */
 const emptyForm = {
   nombre:'', categoria:CATS[0], sede_id:'',
-  monto_mensual:'', tipo_pago:'efectivo',
+  monto_variable:false, monto_mensual:'', tipo_pago:'efectivo',
   beneficiario:'', banco:'', numero_cuenta:'',
   dia_vencimiento:'', notas:'',
 };
@@ -474,7 +501,8 @@ function ConfigTab({ profile, sedes }) {
       nombre:         item.nombre,
       categoria:      item.categoria,
       sede_id:        item.sede_id || '',
-      monto_mensual:  String(item.monto_mensual),
+      monto_variable: item.monto_mensual == null,
+      monto_mensual:  item.monto_mensual != null ? String(item.monto_mensual) : '',
       tipo_pago:      item.tipo_pago || 'efectivo',
       beneficiario:   item.beneficiario || '',
       banco:          item.banco || '',
@@ -488,8 +516,8 @@ function ConfigTab({ profile, sedes }) {
   const save = async () => {
     setErr('');
     if (!form.nombre.trim()) { setErr('El nombre es obligatorio.'); return; }
-    const monto = parseFloat(form.monto_mensual);
-    if (isNaN(monto) || monto < 0) { setErr('Monto inválido.'); return; }
+    const monto = form.monto_variable ? null : parseFloat(form.monto_mensual);
+    if (!form.monto_variable && (isNaN(monto) || monto < 0)) { setErr('Monto inválido.'); return; }
 
     setSaving(true);
     const row = {
@@ -528,7 +556,7 @@ function ConfigTab({ profile, sedes }) {
   };
 
   const sedeName = id => id ? (sedes.find(s=>s.id===id)?.nombre||'—') : 'Todas las sedes';
-  const totalActivo = items.filter(i=>i.activo).reduce((s,i)=>s+Number(i.monto_mensual),0);
+  const totalActivo = items.filter(i=>i.activo).reduce((s,i)=>s+Number(i.monto_mensual||0),0);
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -581,7 +609,9 @@ function ConfigTab({ profile, sedes }) {
             </div>
             <span style={{fontSize:12,color:T.mid}}>{item.categoria}</span>
             <span style={{fontSize:12,color:T.mid}}>{sedeName(item.sede_id)}</span>
-            <span style={{fontSize:13.5,fontWeight:700,color:T.hi}}>{fmtQ(item.monto_mensual)}</span>
+            <span style={{fontSize:13.5,fontWeight:700,color:item.monto_mensual!=null?T.hi:T.lo,fontStyle:item.monto_mensual!=null?'normal':'italic'}}>
+              {item.monto_mensual!=null?fmtQ(item.monto_mensual):'Variable'}
+            </span>
             <div>
               <div style={{fontSize:11.5,color:T.mid,textTransform:'capitalize',marginBottom:1}}>
                 {item.tipo_pago==='transferencia'?'Transferencia':'Efectivo'}
@@ -627,13 +657,35 @@ function ConfigTab({ profile, sedes }) {
           </Sel>
         </div>
 
+        {/* Toggle monto variable */}
+        <label style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer',
+          marginBottom:12,padding:'10px 13px',borderRadius:8,
+          background:form.monto_variable?'rgba(234,179,8,0.08)':'transparent',
+          border:`1px solid ${form.monto_variable?T.warn+'55':T.border}`,
+          transition:'all 0.15s'}}>
+          <input type="checkbox" checked={form.monto_variable}
+            onChange={e=>set('monto_variable',e.target.checked)}
+            style={{width:15,height:15,accentColor:T.warn,cursor:'pointer'}}/>
+          <div>
+            <div style={{fontSize:13,fontWeight:600,color:form.monto_variable?T.warn:T.hi}}>
+              Monto variable
+            </div>
+            <div style={{fontSize:11.5,color:T.lo,marginTop:1}}>
+              El monto se ingresa cada mes al registrar el pago (ej: recibo de luz)
+            </div>
+          </div>
+        </label>
+
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-          <Field label="Monto mensual (Q)">
-            <TInput type="number" min="0" step="0.01" value={form.monto_mensual}
-              onChange={e=>set('monto_mensual',e.target.value)} placeholder="Ej: 2500.00"/>
-          </Field>
+          {!form.monto_variable && (
+            <Field label="Monto mensual (Q)">
+              <TInput type="number" min="0" step="0.01" value={form.monto_mensual}
+                onChange={e=>set('monto_mensual',e.target.value)} placeholder="Ej: 2500.00"/>
+            </Field>
+          )}
           <Sel label="Día de vencimiento" value={form.dia_vencimiento}
-            onChange={e=>set('dia_vencimiento',e.target.value)} hint="Opcional">
+            onChange={e=>set('dia_vencimiento',e.target.value)} hint="Opcional"
+            style={{gridColumn:form.monto_variable?'1/-1':'auto'}}>
             <option value="">Sin fecha fija</option>
             {DIAS.map(d=><option key={d.value} value={d.value}>{d.label}</option>)}
           </Sel>
