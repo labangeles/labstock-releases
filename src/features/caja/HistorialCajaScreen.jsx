@@ -31,8 +31,7 @@ function DetallePanel({ cuadreId, abiertoPasado, isAdmin, onCerrar, cerrando, no
     ]).then(([g, d]) => {
       setGastos(g.data || []);
       setDepositos(d.data || []);
-      setLoading(false);
-    });
+    }).catch(() => {}).finally(() => setLoading(false));
   }, [cuadreId]);
 
   if (loading) return (
@@ -156,6 +155,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
   const [sedeFiltro, setSedeF]      = useState('');
   const [cuadres, setCuadres]       = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState(null);
   const [expandedId, setExpanded]   = useState(null);
   const [exporting, setExporting]   = useState(false);
   const [exportErr, setExportErr]   = useState('');
@@ -165,6 +165,7 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
 
     // Usuarios sin acceso global y sin sede asignada: no mostrar nada
     if (!canSeeAllSedes && !profile?.sede_id && !sedeFiltro) {
@@ -181,9 +182,16 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
     if (sedeFiltro) q = q.eq('sede_id', sedeFiltro);
     else if (!canSeeAllSedes && profile?.sede_id) q = q.eq('sede_id', profile.sede_id);
 
-    const { data } = await q;
-    setCuadres(data || []);
-    setLoading(false);
+    try {
+      const { data, error } = await q;
+      if (error) throw error;
+      setCuadres(data || []);
+    } catch {
+      setCuadres([]);
+      setLoadError('Error al cargar el historial. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, [fechaDesde, fechaHasta, sedeFiltro]);
@@ -208,12 +216,13 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
       `¿Cerrar el cuadre de "${cuadre.sede_nombre}" del ${fmtFecha(cuadre.fecha)} como administrador?\n\nLos valores actuales quedarán registrados tal como están.`
     )) return;
     setCerrando(cuadre.id);
-    await supabase.from('cuadres_caja').update({
+    const { error } = await supabase.from('cuadres_caja').update({
       estado:     'cerrado',
       cerrado_at: new Date().toISOString(),
       notas:      'Cerrado por administrador desde historial.',
     }).eq('id', cuadre.id);
     setCerrando(null);
+    if (error) { window.alert('Error al cerrar el cuadre. Intenta de nuevo.'); return; }
     load();
   };
 
@@ -309,6 +318,14 @@ export function HistorialCajaScreen({ profile, isAdmin, sedes }) {
         {loading ? (
           <div style={{ padding:'40px 18px', textAlign:'center', color:T.lo, fontSize:13 }}>
             Cargando...
+          </div>
+        ) : loadError ? (
+          <div style={{ padding:'24px 18px', display:'flex', alignItems:'center', gap:10 }}>
+            <Ico.Warn s={15} c={T.crit}/>
+            <span style={{ fontSize:13, color:T.crit }}>{loadError}</span>
+            <Btn variant="secondary" size="sm" onClick={load} style={{ marginLeft:'auto' }}>
+              Reintentar
+            </Btn>
           </div>
         ) : cuadres.length === 0 ? (
           <div style={{ padding:'40px 18px', textAlign:'center', color:T.lo, fontSize:13 }}>

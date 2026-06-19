@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { T, Btn, Field, TInput, TSelect } from '../../../shared/ui';
 
 const CATEGORIAS = [
@@ -14,6 +14,9 @@ const CATEGORIAS = [
 export function GastoModal({ onSave, onClose, saving }) {
   const [f, setF] = useState({ descripcion:'', categoria:'operativo', monto:'', comprobante:'' });
   const [err, setErr] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (!saving) setSubmitting(false); }, [saving]);
 
   const set = (k, v) => { setF(p=>({...p,[k]:v})); setErr(e=>({...e,[k]:null})); };
 
@@ -27,7 +30,9 @@ export function GastoModal({ onSave, onClose, saving }) {
   };
 
   const handleSave = () => {
+    if (submitting || saving) return;
     if (!validate()) return;
+    setSubmitting(true);
     onSave({
       descripcion: f.descripcion.trim(),
       categoria:   f.categoria,
@@ -67,7 +72,7 @@ export function GastoModal({ onSave, onClose, saving }) {
       </Field>
       <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
         <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-        <Btn onClick={handleSave} disabled={saving}>Guardar gasto</Btn>
+        <Btn onClick={handleSave} disabled={saving || submitting}>Guardar gasto</Btn>
       </div>
     </div>
   );

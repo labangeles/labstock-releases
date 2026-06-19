@@ -10,9 +10,12 @@ export function IngresoDiaCard({ ingreso, isOpen, saving, onSave }) {
     if (!editing) setRaw(String(ingreso ?? 0));
   }, [ingreso, editing]);
 
-  const handleSave = () => {
+  const handleSave = (explicit = false) => {
     const val = parseFloat(raw.replace(',', '.'));
     if (isNaN(val) || val < 0) { setRaw(String(ingreso ?? 0)); setEditing(false); return; }
+    if (val === 0 && !explicit && (ingreso ?? 0) > 0) {
+      setRaw(String(ingreso)); setEditing(false); return;
+    }
     const rounded = Math.round(val * 100) / 100;
     onSave(rounded);
     setEditing(false);
@@ -33,8 +36,8 @@ export function IngresoDiaCard({ ingreso, isOpen, saving, onSave }) {
               type="text" inputMode="numeric"
               value={raw}
               onChange={e => { setRaw(e.target.value); setEditing(true); }}
-              onBlur={handleSave}
-              onKeyDown={e => e.key === 'Enter' && handleSave()}
+              onBlur={() => handleSave(false)}
+              onKeyDown={e => e.key === 'Enter' && handleSave(true)}
               style={{ width:'100%', padding:'10px 11px 10px 26px',
                 border:`1px solid ${editing ? T.teal : T.border}`,
                 borderRadius:8, fontFamily:'inherit', fontSize:16, fontWeight:700,
@@ -42,7 +45,7 @@ export function IngresoDiaCard({ ingreso, isOpen, saving, onSave }) {
                 transition:'border-color 0.12s', boxSizing:'border-box' }}
             />
           </div>
-          <Btn onClick={handleSave} disabled={saving} icon={<Ico.Check s={14}/>}>
+          <Btn onClick={() => handleSave(true)} disabled={saving} icon={<Ico.Check s={14}/>}>
             Guardar
           </Btn>
         </div>

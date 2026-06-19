@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { T, Ico, fmtQ } from '../../shared/ui';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 const MESES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
@@ -43,123 +44,163 @@ const selStyle = {
 };
 
 export function AnalisisFinancieroScreen({ sedes }) {
+  const { profile } = useAuth();
   const now  = new Date();
   const [mes,     setMes]     = useState(now.getMonth() + 1);
   const [anio,    setAnio]    = useState(now.getFullYear());
   const [filSede, setFilSede] = useState('');
-  const [data,    setData]    = useState(null);
-  const [loading, setLoad]    = useState(false);
+  const [data,      setData]      = useState(null);
+  const [loading,   setLoad]      = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     setLoad(true);
+    setLoadError(null);
 
-    const inicio    = `${anio}-${String(mes).padStart(2,'0')}-01`;
-    const mesNext   = mes === 12 ? 1 : mes + 1;
-    const anioNext  = mes === 12 ? anio + 1 : anio;
-    const fin       = `${anioNext}-${String(mesNext).padStart(2,'0')}-01`;
+    try {
+      const inicio    = `${anio}-${String(mes).padStart(2,'0')}-01`;
+      const mesNext   = mes === 12 ? 1 : mes + 1;
+      const anioNext  = mes === 12 ? anio + 1 : anio;
+      const fin       = `${anioNext}-${String(mesNext).padStart(2,'0')}-01`;
 
-    // 0. Facturación IGSS Gomera (ventas_facturas categoria=igss del período)
-    const { data: igssData } = await supabase
-      .from('ventas_facturas')
-      .select('estado, monto_total, retencion_iva, pago_esperado, fecha_pago')
-      .eq('categoria', 'igss')
-      .gte('fecha_emision', inicio)
-      .lt('fecha_emision', fin);
+      // 0. Facturación IGSS Gomera (ventas_facturas categoria=igss del período)
+      const { data: igssData, error: e0 } = await supabase
+        .from('ventas_facturas')
+        .select('estado, monto_total, retencion_iva, pago_esperado, fecha_pago')
+        .eq('categoria', 'igss')
+        .eq('organizacion_id', profile.organizacion_id)
+        .gte('fecha_emision', inicio)
+        .lt('fecha_emision', fin);
+      if (e0) throw e0;
 
-    // 1. Cuadres cerrados del período
-    let q1 = supabase.from('cuadres_caja')
-      .select('id, sede_id, ingreso_dia')
-      .eq('estado','cerrado')
-      .gte('fecha', inicio)
-      .lt('fecha', fin);
-    if (filSede) q1 = q1.eq('sede_id', filSede);
-    const { data: cuadres } = await q1;
+      // 1. Cuadres cerrados del período
+      let q1 = supabase.from('cuadres_caja')
+        .select('id, sede_id, ingreso_dia')
+        .eq('estado','cerrado')
+        .gte('fecha', inicio)
+        .lt('fecha', fin);
+      if (filSede) q1 = q1.eq('sede_id', filSede);
+      const { data: cuadres, error: e1 } = await q1;
+      if (e1) throw e1;
 
-    // 2. Gastos de caja (caja chica) vinculados a esos cuadres
-    const cuadreIds = (cuadres || []).map(c => c.id);
-    let gastosCajaData = [];
-    if (cuadreIds.length > 0) {
-      const { data: gd } = await supabase
-        .from('gastos_caja')
-        .select('cuadre_id, monto')
-        .in('cuadre_id', cuadreIds);
-      gastosCajaData = gd || [];
-    }
-
-    // 3. Compras a proveedores del período
-    let q3 = supabase.from('compras')
-      .select('sede_id, monto_total')
-      .gte('fecha_recepcion', inicio)
-      .lt('fecha_recepcion', fin);
-    if (filSede) q3 = q3.eq('sede_id', filSede);
-    const { data: comprasData } = await q3;
-
-    // 4. Gastos fijos activos
-    const { data: fijosData } = await supabase
-      .from('gastos_fijos')
-      .select('sede_id, monto_mensual, nombre, categoria')
-      .eq('activo', true);
-
-    // Construir mapa por sede
-    const sedesList = filSede ? sedes.filter(s => s.id === filSede) : sedes;
-    const sedeMap = {};
-    for (const s of sedesList) {
-      sedeMap[s.id] = { nombre:s.nombre, ingresos:0, gastosCaja:0, compras:0, gastosFijos:0 };
-    }
-
-    // Mapa cuadre_id → sede_id
-    const cuadreSedeMap = {};
-    for (const c of (cuadres || [])) {
-      cuadreSedeMap[c.id] = c.sede_id;
-      if (sedeMap[c.sede_id]) sedeMap[c.sede_id].ingresos += Number(c.ingreso_dia || 0);
-    }
-
-    for (const g of gastosCajaData) {
-      const sid = cuadreSedeMap[g.cuadre_id];
-      if (sid && sedeMap[sid]) sedeMap[sid].gastosCaja += Number(g.monto || 0);
-    }
-
-    for (const c of (comprasData || [])) {
-      if (sedeMap[c.sede_id]) sedeMap[c.sede_id].compras += Number(c.monto_total || 0);
-    }
-
-    // Gastos fijos: sede_id=null es costo general de la org
-    let costoGeneral = 0;
-    for (const f of (fijosData || [])) {
-      if (!f.sede_id) {
-        costoGeneral += Number(f.monto_mensual || 0);
-      } else if (sedeMap[f.sede_id]) {
-        sedeMap[f.sede_id].gastosFijos += Number(f.monto_mensual || 0);
+      // 2. Gastos de caja (caja chica) vinculados a esos cuadres
+      const cuadreIds = (cuadres || []).map(c => c.id);
+      let gastosCajaData = [];
+      if (cuadreIds.length > 0) {
+        const { data: gd, error: e2 } = await supabase
+          .from('gastos_caja')
+          .select('cuadre_id, monto')
+          .in('cuadre_id', cuadreIds);
+        if (e2) throw e2;
+        gastosCajaData = gd || [];
       }
+
+      // 3. Compras a proveedores del período (excluir anuladas)
+      let q3 = supabase.from('compras')
+        .select('sede_id, monto_total')
+        .eq('estado', 'activo')
+        .gte('fecha_recepcion', inicio)
+        .lt('fecha_recepcion', fin);
+      if (filSede) q3 = q3.eq('sede_id', filSede);
+      const { data: comprasData, error: e3 } = await q3;
+      if (e3) throw e3;
+
+      // 4. Gastos fijos activos
+      const { data: fijosData, error: e4 } = await supabase
+        .from('gastos_fijos')
+        .select('id, sede_id, monto_mensual, nombre, categoria')
+        .eq('activo', true)
+        .eq('organizacion_id', profile.organizacion_id);
+      if (e4) throw e4;
+
+      // 4b. Pagos reales registrados este mes (para gastos con monto variable)
+      const gastoFijoIds = (fijosData || []).map(f => f.id);
+      const pagoFijoMap = {};
+      if (gastoFijoIds.length > 0) {
+        const { data: pagosF, error: e4b } = await supabase
+          .from('gastos_fijos_pagos')
+          .select('gasto_fijo_id, monto_pagado')
+          .in('gasto_fijo_id', gastoFijoIds)
+          .eq('mes', mes)
+          .eq('anio', anio)
+          .eq('pagado', true);
+        if (e4b) throw e4b;
+        for (const p of (pagosF || [])) {
+          pagoFijoMap[p.gasto_fijo_id] = Number(p.monto_pagado || 0);
+        }
+      }
+
+      // Construir mapa por sede
+      const sedesList = filSede ? sedes.filter(s => s.id === filSede) : sedes;
+      const sedeMap = {};
+      for (const s of sedesList) {
+        sedeMap[s.id] = { nombre:s.nombre, ingresos:0, gastosCaja:0, compras:0, gastosFijos:0 };
+      }
+
+      // Mapa cuadre_id → sede_id
+      const cuadreSedeMap = {};
+      for (const c of (cuadres || [])) {
+        cuadreSedeMap[c.id] = c.sede_id;
+        if (sedeMap[c.sede_id]) sedeMap[c.sede_id].ingresos += Number(c.ingreso_dia || 0);
+      }
+
+      for (const g of gastosCajaData) {
+        const sid = cuadreSedeMap[g.cuadre_id];
+        if (sid && sedeMap[sid]) sedeMap[sid].gastosCaja += Number(g.monto || 0);
+      }
+
+      for (const c of (comprasData || [])) {
+        if (sedeMap[c.sede_id]) sedeMap[c.sede_id].compras += Number(c.monto_total || 0);
+      }
+
+      // Gastos fijos: usa monto real pagado si existe, si no cae al monto plantilla
+      let costoGeneral = 0;
+      for (const f of (fijosData || [])) {
+        const monto = f.id in pagoFijoMap
+          ? pagoFijoMap[f.id]
+          : Number(f.monto_mensual || 0);
+        if (!f.sede_id) {
+          costoGeneral += monto;
+        } else if (sedeMap[f.sede_id]) {
+          sedeMap[f.sede_id].gastosFijos += monto;
+        }
+      }
+
+      // Resumen IGSS
+      const igssRows = igssData || [];
+      const igss = {
+        totalFacturas:  igssRows.length,
+        totalBruto:     igssRows.reduce((s,r) => s + Number(r.monto_total    || 0), 0),
+        totalIVA:       igssRows.reduce((s,r) => s + Number(r.retencion_iva  || 0), 0),
+        totalDeposito:  igssRows.reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
+        depositoPagado: igssRows.filter(r => r.estado === 'pagada')
+                                .reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
+        pendientes:     igssRows.filter(r => r.estado === 'pendiente').length,
+      };
+
+      setData({ sedeMap, costoGeneral, igss });
+    } catch {
+      setLoadError('Error al cargar los datos financieros. Intenta de nuevo.');
+      setData(null);
+    } finally {
+      setLoad(false);
     }
-
-    // Resumen IGSS
-    const igssRows = igssData || [];
-    const igss = {
-      totalFacturas:  igssRows.length,
-      totalBruto:     igssRows.reduce((s,r) => s + Number(r.monto_total    || 0), 0),
-      totalIVA:       igssRows.reduce((s,r) => s + Number(r.retencion_iva  || 0), 0),
-      totalDeposito:  igssRows.reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
-      depositoPagado: igssRows.filter(r => r.estado === 'pagada')
-                              .reduce((s,r) => s + Number(r.pago_esperado  || 0), 0),
-      pendientes:     igssRows.filter(r => r.estado === 'pendiente').length,
-    };
-
-    setData({ sedeMap, costoGeneral, igss });
-    setLoad(false);
   }, [mes, anio, filSede, sedes]);
 
   useEffect(() => { load(); }, [load]);
 
   // Totales
-  const sedeRows   = data ? Object.values(data.sedeMap) : [];
-  const costoGen   = data?.costoGeneral || 0;
-  const igss       = data?.igss || { totalFacturas:0, totalBruto:0, totalIVA:0, totalDeposito:0, depositoPagado:0, pendientes:0 };
-  const totalCaja  = sedeRows.reduce((s,r) => s + r.ingresos, 0);
-  const totalIng   = totalCaja + igss.depositoPagado;  // caja + IGSS cobrado
-  const totalGCaja = sedeRows.reduce((s,r) => s + r.gastosCaja, 0);
-  const totalComp  = sedeRows.reduce((s,r) => s + r.compras, 0);
-  const totalFijos = sedeRows.reduce((s,r) => s + r.gastosFijos, 0) + costoGen;
+  const sedeRows    = data ? Object.values(data.sedeMap) : [];
+  // costos generales de org se omiten al filtrar por una sede específica
+  const costoGen    = (filSede ? 0 : data?.costoGeneral) || 0;
+  const igss        = data?.igss || { totalFacturas:0, totalBruto:0, totalIVA:0, totalDeposito:0, depositoPagado:0, pendientes:0 };
+  const gomeraSede  = (sedes || []).find(s => s.nombre?.toLowerCase().includes('gomera'));
+  const mostrarIGSS = !filSede || filSede === gomeraSede?.id;
+  const totalCaja   = sedeRows.reduce((s,r) => s + r.ingresos, 0);
+  const totalIng    = totalCaja + (mostrarIGSS ? igss.depositoPagado : 0);
+  const totalGCaja  = sedeRows.reduce((s,r) => s + r.gastosCaja, 0);
+  const totalComp   = sedeRows.reduce((s,r) => s + r.compras, 0);
+  const totalFijos  = sedeRows.reduce((s,r) => s + r.gastosFijos, 0) + costoGen;
   const totalVar   = totalGCaja + totalComp;
   const totalEgr   = totalVar + totalFijos;
   const utilidad   = totalIng - totalEgr;
@@ -201,6 +242,16 @@ export function AnalisisFinancieroScreen({ sedes }) {
         <div style={{ textAlign:'center', padding:'60px 0', color:T.lo, fontSize:13 }}>
           Calculando período {MESES[mes-1]} {anio}...
         </div>
+      ) : loadError ? (
+        <div style={{ background:T.critBg, border:`1px solid ${T.crit}44`, borderRadius:10,
+          padding:'14px 18px', display:'flex', alignItems:'center', gap:10 }}>
+          <Ico.Warn s={15} c={T.crit}/>
+          <span style={{ fontSize:13, color:T.crit, flex:1 }}>{loadError}</span>
+          <button onClick={load} style={{ fontSize:12.5, color:T.teal, background:'none',
+            border:'none', cursor:'pointer', padding:'4px 10px', fontFamily:'inherit', fontWeight:600 }}>
+            Reintentar
+          </button>
+        </div>
       ) : data && (
         <>
           {/* Tarjetas resumen */}
@@ -210,7 +261,7 @@ export function AnalisisFinancieroScreen({ sedes }) {
               value={totalIng}
               color={T.ok}
               bg={T.okBg}
-              sub={`Caja ${fmtQ(totalCaja)} + IGSS ${fmtQ(igss.depositoPagado)}`}
+              sub={mostrarIGSS ? `Caja ${fmtQ(totalCaja)} + IGSS ${fmtQ(igss.depositoPagado)}` : `Caja ${fmtQ(totalCaja)}`}
             />
             <SummaryCard
               label="Gastos Variables"
@@ -248,7 +299,7 @@ export function AnalisisFinancieroScreen({ sedes }) {
               label="Desglose gastos fijos"
               items={[
                 { label:'Por sede específica', value:totalFijos - costoGen, color:'#7C3AED' },
-                { label:'Costos generales org.', value:costoGen, color:'#7C3AED' },
+                ...(!filSede ? [{ label:'Costos generales org.', value:costoGen, color:'#7C3AED' }] : []),
               ]}
             />
             <div style={{ background:T.surface, borderRadius:10, padding:'14px 16px',
@@ -307,7 +358,25 @@ export function AnalisisFinancieroScreen({ sedes }) {
                 );
               })}
 
-              {/* Fila costos generales */}
+              {/* Fila IGSS — atribuye ingreso IGSS a Gomera en la tabla */}
+              {mostrarIGSS && igss.depositoPagado > 0 && (
+                <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 1fr',
+                  padding:'10px 20px', alignItems:'center', background:'#F0FDF4',
+                  borderTop:`1px solid #6EE7B733` }}>
+                  <span style={{ fontSize:12, fontStyle:'italic', color:'#065F46' }}>
+                    + IGSS cobrado (Gomera)
+                  </span>
+                  <span style={{ fontSize:12.5, color:'#065F46', fontWeight:600 }}>
+                    {fmtQ(igss.depositoPagado)}
+                  </span>
+                  <span/><span/><span/>
+                  <span style={{ fontSize:12.5, color:'#065F46', fontWeight:600 }}>
+                    {fmtQ(igss.depositoPagado)}
+                  </span>
+                </div>
+              )}
+
+              {/* Fila costos generales org */}
               {costoGen > 0 && (
                 <div style={{ display:'grid', gridTemplateColumns:'1.5fr 1fr 1fr 1fr 1fr 1fr',
                   padding:'10px 20px', alignItems:'center', background:'#F5F3FF',
@@ -349,8 +418,8 @@ export function AnalisisFinancieroScreen({ sedes }) {
             </div>
           )}
 
-          {/* Sección IGSS Gomera */}
-          {(igss.totalFacturas > 0 || true) && (
+          {/* Sección IGSS Gomera — solo visible cuando se muestra Gomera o todas las sedes */}
+          {mostrarIGSS && igss.totalFacturas > 0 && (
             <div style={{ background:T.surface, borderRadius:12, border:`1px solid #6EE7B733`,
               overflow:'hidden' }}>
               <div style={{ padding:'14px 20px', borderBottom:`1px solid #6EE7B733`,
@@ -394,7 +463,3 @@ export function AnalisisFinancieroScreen({ sedes }) {
   );
 }
 
-function cuadresSub(rows) {
-  // placeholder — cuadres count not tracked in this view
-  return '';
-}

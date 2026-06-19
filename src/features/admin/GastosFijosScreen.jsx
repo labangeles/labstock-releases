@@ -89,6 +89,7 @@ function ChecklistTab({ profile, sedes, readOnly }) {
   const [filSede,  setFilSede]  = useState('');
   const [items,    setItems]    = useState([]);
   const [loading,  setLoad]     = useState(false);
+  const [loadError,setLoadError]= useState(null);
   const [pagoModal,setPagoModal]= useState(null); // { gasto, pago }
   const [pagoForm, setPagoForm] = useState({});
   const [saving,   setSaving]   = useState(false);
@@ -96,19 +97,23 @@ function ChecklistTab({ profile, sedes, readOnly }) {
 
   const load = useCallback(async () => {
     setLoad(true);
+    setLoadError(null);
 
     let q = supabase.from('gastos_fijos').select('*').eq('activo', true);
     if (filSede) q = q.eq('sede_id', filSede);
-    const { data: gastos } = await q;
+    const { data: gastos, error: gastosErr } = await q;
 
+    if (gastosErr) { setLoadError('Error al cargar los gastos fijos. Intenta de nuevo.'); setLoad(false); return; }
     if (!gastos || gastos.length === 0) { setItems([]); setLoad(false); return; }
 
     const gastoIds = gastos.map(g => g.id);
-    const { data: pagos } = await supabase
+    const { data: pagos, error: pagosErr } = await supabase
       .from('gastos_fijos_pagos')
       .select('*')
       .in('gasto_fijo_id', gastoIds)
       .eq('mes', mes).eq('anio', anio);
+
+    if (pagosErr) { setLoadError('Error al cargar los pagos del mes. Intenta de nuevo.'); setLoad(false); return; }
 
     const pagoMap = {};
     for (const p of (pagos || [])) pagoMap[p.gasto_fijo_id] = p;
@@ -124,8 +129,9 @@ function ChecklistTab({ profile, sedes, readOnly }) {
           mes, anio,
           pagado: false,
         }));
-        const { data: created } = await supabase
+        const { data: created, error: createErr } = await supabase
           .from('gastos_fijos_pagos').insert(inserts).select();
+        if (createErr) { setLoadError('Error al inicializar los registros del mes. Recarga la página.'); setLoad(false); return; }
         for (const p of (created || [])) pagoMap[p.gasto_fijo_id] = p;
       }
     }
@@ -163,26 +169,33 @@ function ChecklistTab({ profile, sedes, readOnly }) {
     }
     setPagoErr('');
     setSaving(true);
-    await supabase.from('gastos_fijos_pagos').update({
-      pagado:         true,
-      fecha_pago:     pagoForm.fecha_pago || null,
-      monto_pagado:   monto,
-      metodo_pago:    pagoForm.metodo_pago,
-      comprobante:    pagoForm.comprobante || null,
-      notas:          pagoForm.notas || null,
-      registrado_por: profile.id,
-    }).eq('id', pagoModal.pago.id);
-    setSaving(false);
-    setPagoModal(null);
-    load();
+    try {
+      const { error } = await supabase.from('gastos_fijos_pagos').update({
+        pagado:         true,
+        fecha_pago:     pagoForm.fecha_pago || null,
+        monto_pagado:   monto,
+        metodo_pago:    pagoForm.metodo_pago,
+        comprobante:    pagoForm.comprobante || null,
+        notas:          pagoForm.notas || null,
+        registrado_por: profile.id,
+      }).eq('id', pagoModal.pago.id);
+      if (error) { setPagoErr(error.message); return; }
+      setPagoModal(null);
+      load();
+    } catch (e) {
+      setPagoErr('Error de conexión. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const desmarcar = async (pago) => {
     if (!window.confirm('¿Desmarcar este pago? Se borrará la información registrada.')) return;
-    await supabase.from('gastos_fijos_pagos').update({
+    const { error } = await supabase.from('gastos_fijos_pagos').update({
       pagado:false, fecha_pago:null, monto_pagado:null,
       metodo_pago:null, comprobante:null, notas:null, registrado_por:null,
     }).eq('id', pago.id);
+    if (error) { window.alert('Error al desmarcar el pago. Intenta de nuevo.'); return; }
     load();
   };
 
@@ -237,6 +250,13 @@ function ChecklistTab({ profile, sedes, readOnly }) {
       {/* Lista */}
       {loading ? (
         <div style={{textAlign:'center',padding:'48px 0',color:T.lo}}>Cargando {MESES[mes-1]} {anio}…</div>
+      ) : loadError ? (
+        <div style={{background:T.critBg,border:`1px solid ${T.crit}44`,borderRadius:10,
+          padding:'12px 18px',display:'flex',alignItems:'center',gap:10}}>
+          <Ico.Warn s={15} c={T.crit}/>
+          <span style={{fontSize:13,color:T.crit,flex:1}}>{loadError}</span>
+          <Btn variant="secondary" size="sm" onClick={load}>Reintentar</Btn>
+        </div>
       ) : items.length === 0 ? (
         <div style={{textAlign:'center',padding:'56px 20px',background:T.surface,
           borderRadius:12,border:`1px solid ${T.border}`}}>
@@ -476,18 +496,21 @@ const emptyForm = {
 };
 
 function ConfigTab({ profile, sedes }) {
-  const [items,  setItems]  = useState([]);
-  const [loading,setLoad]   = useState(true);
-  const [modal,  setModal]  = useState(null); // null | 'add' | item_object
-  const [form,   setForm]   = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [err,    setErr]    = useState('');
+  const [items,     setItems]     = useState([]);
+  const [loading,   setLoad]      = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  const [modal,     setModal]     = useState(null); // null | 'add' | item_object
+  const [form,      setForm]      = useState(emptyForm);
+  const [saving,    setSaving]    = useState(false);
+  const [err,       setErr]       = useState('');
 
   const load = async () => {
     setLoad(true);
-    const { data } = await supabase.from('gastos_fijos').select('*')
+    setLoadError(null);
+    const { data, error } = await supabase.from('gastos_fijos').select('*')
       .order('sede_id',{nullsFirst:true}).order('categoria').order('nombre');
-    setItems(data || []);
+    if (error) setLoadError('Error al cargar los gastos fijos. Intenta de nuevo.');
+    else setItems(data || []);
     setLoad(false);
   };
 
@@ -545,13 +568,15 @@ function ConfigTab({ profile, sedes }) {
   };
 
   const toggleActivo = async item => {
-    await supabase.from('gastos_fijos').update({activo:!item.activo}).eq('id',item.id);
+    const { error } = await supabase.from('gastos_fijos').update({activo:!item.activo}).eq('id',item.id);
+    if (error) { window.alert('Error al cambiar el estado. Intenta de nuevo.'); return; }
     load();
   };
 
   const del = async item => {
     if (!window.confirm(`¿Eliminar "${item.nombre}"?\nSe borrarán también los registros de pago.`)) return;
-    await supabase.from('gastos_fijos').delete().eq('id', item.id);
+    const { error } = await supabase.from('gastos_fijos').delete().eq('id', item.id);
+    if (error) { window.alert('Error al eliminar el gasto fijo. Intenta de nuevo.'); return; }
     load();
   };
 
@@ -588,6 +613,12 @@ function ConfigTab({ profile, sedes }) {
 
         {loading ? (
           <div style={{padding:'40px 0',textAlign:'center',color:T.lo}}>Cargando…</div>
+        ) : loadError ? (
+          <div style={{padding:'20px 18px',display:'flex',alignItems:'center',gap:10}}>
+            <Ico.Warn s={15} c={T.crit}/>
+            <span style={{fontSize:13,color:T.crit,flex:1}}>{loadError}</span>
+            <Btn variant="secondary" size="sm" onClick={load}>Reintentar</Btn>
+          </div>
         ) : items.length === 0 ? (
           <div style={{padding:'56px 20px',textAlign:'center'}}>
             <div style={{fontSize:13.5,fontWeight:600,color:T.mid}}>Sin gastos fijos</div>

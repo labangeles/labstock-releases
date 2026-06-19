@@ -66,6 +66,8 @@ const toDB = (item, sedeId, userId) => ({
 
 /* ── PEDIDOS ─────────────────────────────────────────────── */
 const SANTA_LUCIA_NAME = 'Santa Lucía';
+const normStr = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const SANTA_LUCIA_NORM = normStr(SANTA_LUCIA_NAME);
 const ORDER_STATUS = {
   pendiente:  { label:'Pendiente',   c:'#B07400', bg:'#FFF0D0' },
   en_proceso: { label:'En proceso',  c:'#1D4ED8', bg:'#EEF2FF' },
@@ -702,7 +704,7 @@ function ImportModal({onImport,onClose}) {
   const [loading,setLoading]=useState(false);
 
   const download=async()=>{
-    const template=`${BOM}${CSV_SEP}\r\n${CSV_COLS}\r\nGlucosa Enzimatica,Reactivos,frascos,4,5,20\r\nCreatinina,Reactivos,frascos,8,5,20`;
+    const template=`${BOM}${CSV_SEP}\r\n${CSV_COLS}\r\n,Glucosa Enzimatica,Reactivos,frascos,4,5,20\r\n,Creatinina,Reactivos,frascos,8,5,20`;
     if(window.electronAPI?.saveFile){
       await window.electronAPI.saveFile({defaultPath:'plantilla-labstock.csv',content:template});
     } else {
@@ -1622,7 +1624,7 @@ function CartModal({items,sedes,currentSedeId,onSubmit,onClose}) {
   const [saving,setSaving]=useState(false);
   const [search,setSearch]=useState('');
 
-  const santaLucia=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME);
+  const santaLucia=sedes.find(s=>normStr(s.nombre)===SANTA_LUCIA_NORM);
 
   const sortOrd={out:0,crit:1,warn:2,ok:3};
   const sorted=[...items].sort((a,b)=>sortOrd[getStatus(a)]-sortOrd[getStatus(b)]);
@@ -1905,7 +1907,7 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
   const [toast,setToast]=useState('');
   const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(''),4000);};
 
-  const santaLuciaId=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME)?.id;
+  const santaLuciaId=sedes.find(s=>normStr(s.nombre)===SANTA_LUCIA_NORM)?.id;
   const isSantaLucia=currentSedeId===santaLuciaId;
   const canManageIncoming=isSantaLucia||isAdmin;
 
@@ -2073,7 +2075,7 @@ function PedidosScreen({sedes,profile,isAdmin,currentSedeId,items,onShowCart}) {
       {/* Tabs */}
       {canManageIncoming&&(
         <div style={{display:'flex',gap:0,borderBottom:`1px solid ${T.border}`}}>
-          {[{id:'entrantes',label:'Entrantes',badge:pendingBadge},{id:'mios',label:'Mis pedidos'}].map(t=>(
+          {[{id:'entrantes',label:'Entrantes',badge:pendingBadge},{id:'mios',label:isAdmin?'Todos los pedidos':'Mis pedidos'}].map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)}
               style={{padding:'9px 18px',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',
                 borderBottom:`2px solid ${tab===t.id?T.teal:'transparent'}`,marginBottom:-1,
@@ -2482,7 +2484,7 @@ export default function App() {
   /* ── Badge de pedidos entrantes (Santa Lucía + admin) ── */
   useEffect(()=>{
     if(!profile||!sedes.length) return;
-    const santaId=sedes.find(s=>s.nombre===SANTA_LUCIA_NAME)?.id;
+    const santaId=sedes.find(s=>normStr(s.nombre)===SANTA_LUCIA_NORM)?.id;
     if(!santaId) return;
     const canSee=isAdmin||profile?.sede_id===santaId;
     if(!canSee){setPedBadge(0);return;}
@@ -2581,9 +2583,14 @@ export default function App() {
 
   const handleImport=async(rows)=>{
     if(!currentSedeId) throw new Error('Selecciona una sede antes de importar.');
-    const inserts=rows.map(r=>({...toDB(r,currentSedeId,profile.id)}));
+    // Ensure every row has a unique code before upserting
+    const toInsert=[];
+    for(const r of rows){
+      const code = r.code || (await generateCode(r.category));
+      toInsert.push({...toDB({...r,code},currentSedeId,profile.id)});
+    }
     const {error}=await supabase.from('items')
-      .upsert(inserts,{onConflict:'codigo,sede_id',ignoreDuplicates:false});
+      .upsert(toInsert,{onConflict:'codigo,sede_id',ignoreDuplicates:false});
     if(error) throw new Error(error.message);
     await logAct(currentSedeId,currentSedeName,null,`${rows.length} insumos`,profile.id,profile.nombre,'importar',undefined,rows.length,null);
     loadItems();

@@ -40,22 +40,26 @@ export function AlertasRRHH({ profile, onNav }) {
 
   useEffect(() => {
     const cargar = async () => {
-      const { data: emp } = await supabase.from('empleados')
-        .select('id').eq('profile_id', profile.id).maybeSingle();
-      if (!emp) { setEstado({ docsFaltantes: [], reconocimientos: [], procesos: [] }); return; }
+      try {
+        const { data: emp } = await supabase.from('empleados')
+          .select('id').eq('profile_id', profile.id).maybeSingle();
+        if (!emp) { setEstado({ docsFaltantes: [], reconocimientos: [], procesos: [] }); return; }
 
-      const [docs, acciones] = await Promise.all([
-        supabase.from('empleado_documentos').select('tipo').eq('empleado_id', emp.id),
-        supabase.from('acciones_disciplinarias').select('*')
-          .eq('empleado_id', emp.id).order('fecha', { ascending: false }),
-      ]);
+        const [docs, acciones] = await Promise.all([
+          supabase.from('empleado_documentos').select('tipo').eq('empleado_id', emp.id),
+          supabase.from('acciones_disciplinarias').select('*')
+            .eq('empleado_id', emp.id).order('fecha', { ascending: false }),
+        ]);
 
-      const cargados = new Set((docs.data || []).map((d) => d.tipo));
-      const docsFaltantes = DOCS_REQ.filter((d) => !cargados.has(d.value));
-      const todas = acciones.data || [];
-      const reconocimientos = todas.filter((a) => a.tipo === 'reconocimiento' && !a.acuse_recibo);
-      const procesos = todas.filter((a) => a.tipo !== 'reconocimiento' && !a.acuse_recibo);
-      setEstado({ docsFaltantes, reconocimientos, procesos });
+        const cargados = new Set((docs.data || []).map((d) => d.tipo));
+        const docsFaltantes = DOCS_REQ.filter((d) => !cargados.has(d.value));
+        const todas = acciones.data || [];
+        const reconocimientos = todas.filter((a) => a.tipo === 'reconocimiento' && !a.acuse_recibo);
+        const procesos = todas.filter((a) => a.tipo !== 'reconocimiento' && !a.acuse_recibo);
+        setEstado({ docsFaltantes, reconocimientos, procesos });
+      } catch {
+        setEstado({ docsFaltantes: [], reconocimientos: [], procesos: [] });
+      }
     };
     cargar();
   }, [profile.id]);

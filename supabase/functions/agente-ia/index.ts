@@ -2,6 +2,8 @@
 // Proxy seguro a Gemini para Angelito, el asistente de LabStock.
 // La GEMINI_API_KEY vive solo en Supabase — nunca en el bundle de Electron.
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const GEMINI_KEY = Deno.env.get("GEMINI_API_KEY")!;
 const MODEL = "gemini-2.5-flash";
 
@@ -215,9 +217,42 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    const { contents, rol = "tecnico", permisos = {} } = await req.json();
-    const rolNorm   = (typeof rol === "string" && ["admin","auditor","tecnico","secretaria"].includes(rol)) ? rol : "tecnico";
-    const perm: Permisos = permisos ?? {};
+    // ── C1: Validar JWT — ignorar rol/permisos del body ──────────────
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "No autenticado." }),
+        { status: 401, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+    const supaUser = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const { data: { user }, error: _authErr } = await supaUser.auth.getUser();
+    if (_authErr || !user) {
+      return new Response(
+        JSON.stringify({ error: "No autenticado." }),
+        { status: 401, headers: { ...CORS, "Content-Type": "application/json" } },
+      );
+    }
+    const supaAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: profileData } = await supaAdmin
+      .from("profiles")
+      .select("rol, permisos")
+      .eq("id", user.id)
+      .single();
+    const rolNorm: string =
+      profileData?.rol && ["admin", "auditor", "tecnico", "secretaria"].includes(profileData.rol)
+        ? profileData.rol
+        : "tecnico";
+    const perm: Permisos = profileData?.permisos ?? {};
+
+    const { contents } = await req.json();
     const permitidas   = getToolsPermitidas(rolNorm, perm);
     const declarations = ALL_DECLARATIONS.filter(d => permitidas.includes(d.name));
 

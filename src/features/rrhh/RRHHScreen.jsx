@@ -13,6 +13,7 @@ import EmpleadosTab from './gestion/EmpleadosTab';
 import AprobacionesTab from './gestion/AprobacionesTab';
 import DisciplinaTab from './gestion/DisciplinaTab';
 import AsistenciaTab from './gestion/AsistenciaTab';
+import ExpedienteAdminTab from './gestion/ExpedienteAdminTab';
 import Reconocimientos, { RECONOCIMIENTOS } from '../../components/Reconocimientos';
 import Emblem from '../../components/Emblem';
 
@@ -172,6 +173,7 @@ const AUTOSERVICIO = [
 
 const GESTION = [
   { id: 'empleados',        label: 'Empleados',    Comp: EmpleadosTab,                             roles: ['admin','auditor'] },
+  { id: 'expediente_admin', label: 'Expedientes',  Comp: ExpedienteAdminTab,                       roles: ['admin'] },
   { id: 'asistencia',       label: 'Asistencia',   Comp: AsistenciaTab,                            roles: ['admin','auditor'] },
   { id: 'nomina',           label: 'Nómina',       Comp: () => <Pendiente label="Nómina" />,       roles: ['admin','auditor'] },
   { id: 'prestaciones',     label: 'Prestaciones', Comp: () => <Pendiente label="Prestaciones" />, roles: ['admin','auditor'] },
@@ -183,32 +185,61 @@ export function RRHHScreen() {
   const { profile } = useAuth();
   const rol = profile?.rol;
 
-  const tabs = useMemo(() => {
-    const gestion = GESTION.filter((t) => t.roles.includes(rol));
-    return [...AUTOSERVICIO, ...gestion];
-  }, [rol]);
+  const tieneGestion = ['admin', 'auditor'].includes(rol);
+  const tabsGestion  = useMemo(() => GESTION.filter(t => t.roles.includes(rol)), [rol]);
 
-  const [activa, setActiva] = useState(tabs[0]?.id);
-  const Actual = tabs.find((t) => t.id === activa)?.Comp || (() => null);
+  const [grupo,  setGrupo]  = useState('auto');           // 'auto' | 'gestion'
+  const [activa, setActiva] = useState(AUTOSERVICIO[0]?.id);
+
+  const tabs = grupo === 'gestion' ? tabsGestion : AUTOSERVICIO;
+
+  const cambiarGrupo = (g) => {
+    setGrupo(g);
+    setActiva(g === 'gestion' ? tabsGestion[0]?.id : AUTOSERVICIO[0]?.id);
+  };
+
+  const Actual = tabs.find(t => t.id === activa)?.Comp || (() => null);
 
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ color: T.hi, marginTop: 0, fontSize: 20, fontWeight: 700 }}>Recursos Humanos</h1>
 
-      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${T.border}`, marginBottom: 20, flexWrap: 'wrap' }}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setActiva(t.id)}
+      {/* Encabezado con selector de grupo */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h1 style={{ color: T.hi, margin: 0, fontSize: 20, fontWeight: 700 }}>Recursos Humanos</h1>
+
+        {tieneGestion && (
+          <div style={{ display: 'flex', gap: 4, background: T.canvas, borderRadius: 10, padding: 4 }}>
+            {[
+              { id: 'auto',    label: 'Mi autoservicio' },
+              { id: 'gestion', label: 'Gestión'         },
+            ].map(g => (
+              <button key={g.id} onClick={() => cambiarGrupo(g.id)}
+                style={{
+                  padding: '7px 18px', border: 'none', borderRadius: 7,
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                  background: grupo === g.id ? T.teal       : 'transparent',
+                  color:      grupo === g.id ? '#fff'       : T.mid,
+                  transition: 'background 0.15s, color 0.15s',
+                }}>
+                {g.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Tabs del grupo activo */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${T.border}`, marginBottom: 20 }}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setActiva(t.id)}
             style={{
-              padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer',
+              padding: '9px 16px', border: 'none', background: 'none', cursor: 'pointer',
               fontFamily: 'inherit', fontSize: 13.5,
-              color: activa === t.id ? T.tealDk : T.mid,
+              color:       activa === t.id ? T.tealDk : T.mid,
               borderBottom: activa === t.id ? `2px solid ${T.teal}` : '2px solid transparent',
-              fontWeight: activa === t.id ? 700 : 500,
+              fontWeight:  activa === t.id ? 700 : 500,
               marginBottom: -1,
-            }}
-          >
+            }}>
             {t.label}
           </button>
         ))}

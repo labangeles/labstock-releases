@@ -181,14 +181,14 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
         .eq('estado', 'abierto')
         .lte('fecha', today);
       if (!isAdmin && !isAuditor && currentSedeId) q = q.eq('sede_id', currentSedeId);
-      return q.then(({ count }) => setCuadres(count || 0));
+      return q.then(({ count, error }) => { if (!error) setCuadres(count || 0); }).catch(() => {});
     })() : Promise.resolve();
 
     const p2 = showGastos
       ? supabase.from('gastos_fijos_pagos')
           .select('*', { count:'exact', head:true })
           .eq('mes', mes).eq('anio', anio).eq('pagado', false)
-          .then(({ count }) => setGastos(count || 0))
+          .then(({ count, error }) => { if (!error) setGastos(count || 0); }).catch(() => {})
       : Promise.resolve();
 
     const p3 = showPedidos ? (() => {
@@ -196,7 +196,7 @@ export function InicioScreen({ profile, items, isAdmin, isAuditor, isSecretaria,
         .select('*', { count:'exact', head:true })
         .in('estado', ['pendiente', 'en_proceso']);
       if (!isAdmin && currentSedeId) q = q.eq('sede_origen_id', currentSedeId);
-      return q.then(({ count }) => setPedidos(count || 0));
+      return q.then(({ count, error }) => { if (!error) setPedidos(count || 0); }).catch(() => {});
     })() : Promise.resolve();
 
     Promise.all([p1, p2, p3]).finally(() => setLoad(false));

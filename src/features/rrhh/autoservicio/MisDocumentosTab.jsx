@@ -128,7 +128,8 @@ export default function MisDocumentosTab() {
   const eliminar = async (d) => {
     try {
       await borrarArchivo('rrhh-documentos', d.storage_path);
-      await supabase.from('empleado_documentos').delete().eq('id', d.id);
+      const { error } = await supabase.from('empleado_documentos').delete().eq('id', d.id);
+      if (error) throw error;
       cargar();
     } catch (err) { setMsg(err.message); }
   };

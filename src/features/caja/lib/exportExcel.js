@@ -91,25 +91,30 @@ export async function exportarExcel({ fechaDesde, fechaHasta, sedeId, sedes }) {
   const wsGastos     = XLSX.utils.json_to_sheet(gastosRows.length  ? gastosRows  : [{}]);
   const wsDepositos  = XLSX.utils.json_to_sheet(depositosRows.length ? depositosRows : [{}]);
 
-  // Formato de fecha para columnas de fecha en cada hoja
-  const dateFmt = 'dd/mm/yyyy';
+  // Formato de fecha: columnas "Fecha" → solo fecha, resto → fecha+hora
+  const dateFmt     = 'dd/mm/yyyy';
   const datetimeFmt = 'dd/mm/yyyy hh:mm';
 
-  [wsResumen, wsGastos, wsDepositos].forEach(ws => {
+  const applyDateFormats = (ws) => {
     if (!ws['!ref']) return;
     const range = XLSX.utils.decode_range(ws['!ref']);
+    const dateOnlyCols = new Set();
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const h = ws[XLSX.utils.encode_cell({ r: 0, c: C })];
+      if (h?.v === 'Fecha') dateOnlyCols.add(C);
+    }
     for (let R = range.s.r + 1; R <= range.e.r; R++) {
       for (let C = range.s.c; C <= range.e.c; C++) {
         const addr = XLSX.utils.encode_cell({ r: R, c: C });
         const cell = ws[addr];
-        if (!cell) continue;
-        if (cell.v instanceof Date) {
-          cell.t = 'd';
-          cell.z = datetimeFmt;
-        }
+        if (!cell || !(cell.v instanceof Date)) continue;
+        cell.t = 'd';
+        cell.z = dateOnlyCols.has(C) ? dateFmt : datetimeFmt;
       }
     }
-  });
+  };
+
+  [wsResumen, wsGastos, wsDepositos].forEach(applyDateFormats);
 
   XLSX.utils.book_append_sheet(wb, wsResumen,   'Resumen');
   XLSX.utils.book_append_sheet(wb, wsGastos,    'Gastos');

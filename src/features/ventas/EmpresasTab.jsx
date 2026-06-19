@@ -38,16 +38,20 @@ export default function EmpresasTab() {
   const [editItem,  setEditItem]  = useState(null);
   const [editForm,  setEditForm]  = useState({});
   const [msg,       setMsg]       = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [editErr,   setEditErr]   = useState('');
   const [filtroNIT, setFiltroNIT] = useState('');
   const fileRef = useRef(null);
 
   const cargar = useCallback(async () => {
     if (!profile?.organizacion_id) return;
     setLoading(true);
-    const { data } = await supabase.from('ventas_facturas')
+    setLoadError('');
+    const { data, error } = await supabase.from('ventas_facturas')
       .select('*').eq('organizacion_id', profile.organizacion_id)
       .eq('categoria', 'empresa').order('fecha_emision', { ascending: false });
-    setFacturas(data || []);
+    if (error) setLoadError('Error al cargar las facturas. Intenta de nuevo.');
+    else setFacturas(data || []);
     setLoading(false);
   }, [profile?.organizacion_id]);
 
@@ -75,14 +79,16 @@ export default function EmpresasTab() {
 
   /* Busca o crea el cliente por NIT */
   const upsertCliente = async (nit, nombre) => {
-    const { data: exist } = await supabase.from('ventas_clientes')
+    const { data: exist, error: se } = await supabase.from('ventas_clientes')
       .select('id').eq('nit', nit).eq('organizacion_id', profile.organizacion_id)
       .eq('categoria', 'empresa').maybeSingle();
+    if (se) return null;
     if (exist) return exist.id;
-    const { data: nuevo } = await supabase.from('ventas_clientes').insert({
+    const { data: nuevo, error: ie } = await supabase.from('ventas_clientes').insert({
       organizacion_id: profile.organizacion_id,
       nit, nombre, categoria: 'empresa',
     }).select('id').single();
+    if (ie) return null;
     return nuevo?.id || null;
   };
 
@@ -94,6 +100,7 @@ export default function EmpresasTab() {
 
     for (const item of validas) {
       const cliente_id = await upsertCliente(item.nit_receptor, item.nombre_receptor);
+      if (cliente_id === null) { err++; continue; }
       const { error } = await supabase.from('ventas_facturas').insert({
         organizacion_id: profile.organizacion_id,
         cliente_id,
@@ -131,21 +138,25 @@ export default function EmpresasTab() {
 
   const eliminar = async (f) => {
     if (!window.confirm(`¿Eliminar la factura ${f.serie}-${f.numero_factura}?`)) return;
-    await supabase.from('ventas_facturas').delete().eq('id', f.id);
+    const { error } = await supabase.from('ventas_facturas').delete().eq('id', f.id);
+    if (error) { window.alert('Error al eliminar la factura. Intenta de nuevo.'); return; }
     cargar();
   };
 
   const abrirEditar = (f) => {
     setEditItem(f);
+    setEditErr('');
     setEditForm({ estado: f.estado, notas: f.notas || '', fecha_pago: f.fecha_pago || '' });
   };
 
   const guardarEditar = async () => {
-    await supabase.from('ventas_facturas').update({
+    setEditErr('');
+    const { error } = await supabase.from('ventas_facturas').update({
       estado: editForm.estado, notas: editForm.notas,
       fecha_pago: editForm.fecha_pago || null,
       updated_at: new Date().toISOString(),
     }).eq('id', editItem.id);
+    if (error) { setEditErr('Error al guardar. Intenta de nuevo.'); return; }
     setEditItem(null);
     cargar();
   };
@@ -231,6 +242,12 @@ export default function EmpresasTab() {
       {/* Tabla */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 32, color: T.lo }}>Cargando…</div>
+      ) : loadError ? (
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 10,
+          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 13, color: '#991B1B', flex: 1 }}>{loadError}</span>
+          <Btn variant="secondary" size="sm" onClick={cargar}>Reintentar</Btn>
+        </div>
       ) : filtradas.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 40, color: T.lo, fontSize: 13 }}>
           No hay facturas. Carga archivos XML del DTE.
@@ -360,6 +377,10 @@ export default function EmpresasTab() {
               <TInput value={editForm.notas} placeholder="Observaciones internas"
                 onChange={e => setEditForm(f => ({ ...f, notas: e.target.value }))} />
             </Field>
+            {editErr && (
+              <div style={{ background: '#FEF2F2', borderRadius: 8, padding: '8px 12px',
+                fontSize: 12.5, color: '#991B1B', marginBottom: 4 }}>{editErr}</div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <Btn variant="secondary" onClick={() => setEditItem(null)}>Cancelar</Btn>
               <Btn onClick={guardarEditar}>Guardar</Btn>

@@ -35,6 +35,7 @@ export default function EmpleadosTab() {
   const [cargos,         setCargos]         = useState([]);
   const [profiles,       setProfiles]       = useState([]);
   const [loading,        setLoading]        = useState(true);
+  const [loadError,      setLoadError]      = useState(null);
   const [busqueda,       setBusqueda]       = useState('');
   const [editando,       setEditando]       = useState(null);
   const [edits,          setEdits]          = useState({});
@@ -45,27 +46,35 @@ export default function EmpleadosTab() {
   const [horarioEd,      setHorarioEd]      = useState(null);
 
   const cargar = useCallback(async () => {
-    setLoading(true);
-    const [e, c, p] = await Promise.all([
-      supabase.from('empleados')
-        .select('*, cargos(id, nombre), sedes(nombre), organizacion_id')
-        .eq('organizacion_id', profile.organizacion_id)
-        .order('apellido'),
-      supabase.from('cargos')
-        .select('id, nombre')
-        .eq('organizacion_id', profile.organizacion_id)
-        .eq('activo', true)
-        .order('nombre'),
-      supabase.from('profiles')
-        .select('id, nombre, codigo, rol')
-        .eq('organizacion_id', profile.organizacion_id)
-        .eq('activo', true)
-        .order('nombre'),
-    ]);
-    setEmpleados(e.data || []);
-    setCargos(c.data || []);
-    setProfiles(p.data || []);
-    setLoading(false);
+    setLoading(true); setLoadError(null);
+    try {
+      const [e, c, p] = await Promise.all([
+        supabase.from('empleados')
+          .select('*, cargos(id, nombre), sedes(nombre), organizacion_id')
+          .eq('organizacion_id', profile.organizacion_id)
+          .order('apellido'),
+        supabase.from('cargos')
+          .select('id, nombre')
+          .eq('organizacion_id', profile.organizacion_id)
+          .eq('activo', true)
+          .order('nombre'),
+        supabase.from('profiles')
+          .select('id, nombre, codigo, rol')
+          .eq('organizacion_id', profile.organizacion_id)
+          .eq('activo', true)
+          .order('nombre'),
+      ]);
+      if (e.error) throw e.error;
+      if (c.error) throw c.error;
+      if (p.error) throw p.error;
+      setEmpleados(e.data || []);
+      setCargos(c.data || []);
+      setProfiles(p.data || []);
+    } catch {
+      setLoadError('Error al cargar los empleados. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   }, [profile]);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -147,7 +156,8 @@ export default function EmpleadosTab() {
   };
 
   const toggleActivo = async (emp) => {
-    await supabase.from('empleados').update({ activo: !emp.activo }).eq('id', emp.id);
+    const { error } = await supabase.from('empleados').update({ activo: !emp.activo }).eq('id', emp.id);
+    if (error) { window.alert('Error al cambiar el estado del empleado. Intenta de nuevo.'); return; }
     cargar();
   };
 
@@ -164,9 +174,10 @@ export default function EmpleadosTab() {
         .eq('tipo', 'reconocimiento')
         .eq('asunto', cat.title);
       if (!isPermanent) q = q.gte('fecha', MES_DESDE).lte('fecha', MES_HASTA);
-      await q;
+      const { error } = await q;
+      if (error) { window.alert('Error al quitar el reconocimiento. Intenta de nuevo.'); setTogglingRecon(null); return; }
     } else {
-      await supabase.from('acciones_disciplinarias').insert({
+      const { error } = await supabase.from('acciones_disciplinarias').insert({
         empleado_id:     editando,
         organizacion_id: profile.organizacion_id,
         tipo:            'reconocimiento',
@@ -176,6 +187,7 @@ export default function EmpleadosTab() {
         descripcion:     cat.desc,
         emitido_por:     profile.id,
       });
+      if (error) { window.alert('Error al asignar el reconocimiento. Intenta de nuevo.'); setTogglingRecon(null); return; }
     }
     await cargarEmpRecons(editando);
     setTogglingRecon(null);
@@ -190,6 +202,14 @@ export default function EmpleadosTab() {
 
   return (
     <div style={{ display: 'grid', gap: 16 }}>
+      {loadError && (
+        <div style={{ background: '#FEE2E2', border: '1px solid #FECACA', borderRadius: 10,
+          padding: '12px 16px', color: '#991B1B', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {loadError}
+          <button onClick={cargar} style={{ background: 'none', border: 'none', cursor: 'pointer',
+            color: '#991B1B', fontWeight: 700, fontSize: 13 }}>Reintentar</button>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <div style={{ flex: 1, maxWidth: 300 }}>
           <TInput

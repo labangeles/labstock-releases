@@ -50,6 +50,10 @@ export default function DisciplinaTab() {
         .order('fecha', { ascending: false })
         .limit(30),
     ]);
+    if (e.error || h.error) {
+      setMsg({ tipo: 'err', txt: 'Error al cargar los datos. Intenta de nuevo.' });
+      return;
+    }
     setEmpleados(e.data || []);
     setHistorial(h.data || []);
   }, [profile]);

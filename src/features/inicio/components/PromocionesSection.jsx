@@ -54,14 +54,14 @@ export function PromocionesSection({ profile, isAdmin }) {
 
   const cargar = useCallback(async () => {
     const hoy = HOY();
-    const { data } = await supabase.from('promociones')
+    const { data, error } = await supabase.from('promociones')
       .select('*')
       .eq('organizacion_id', profile.organizacion_id)
       .eq('activo', true)
       .lte('vigente_desde', hoy)
       .gte('vigente_hasta', hoy)
       .order('vigente_hasta');
-    setPromos(data || []);
+    if (!error) setPromos(data || []);
   }, [profile.organizacion_id]);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -113,7 +113,8 @@ export function PromocionesSection({ profile, isAdmin }) {
   };
 
   const eliminar = async (id) => {
-    await supabase.from('promociones').update({ activo: false }).eq('id', id);
+    const { error } = await supabase.from('promociones').update({ activo: false }).eq('id', id);
+    if (error) { window.alert('Error al eliminar la promoción. Intenta de nuevo.'); return; }
     cargar();
   };
 

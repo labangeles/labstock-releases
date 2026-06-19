@@ -151,7 +151,7 @@ function ItemSearch({ sedeId, excludeIds, onAdd }) {
     if (!q.trim() || !sedeId) { setResults([]); return; }
     const t = setTimeout(async () => {
       const { data } = await supabase.from('items')
-        .select('id,nombre,categoria,unidad')
+        .select('id,nombre,categoria,unidad,cantidad_actual,cantidad_maxima')
         .eq('sede_id', sedeId).eq('activo', true)
         .ilike('nombre', `%${q}%`).limit(8);
       setResults((data || []).filter(r => !excludeIds.includes(r.id)));
@@ -167,7 +167,8 @@ function ItemSearch({ sedeId, excludeIds, onAdd }) {
 
   const pick = item => {
     onAdd({ _id: Date.now(), item_id: item.id, nombre: item.nombre,
-      categoria: item.categoria || 'miscelaneos', unidad: item.unidad || UNITS[0], cantidad: '1' });
+      categoria: item.categoria || 'miscelaneos', unidad: item.unidad || UNITS[0], cantidad: '1',
+      _cap_actual: item.cantidad_actual ?? null, _cap_max: item.cantidad_maxima ?? null });
     setQ(''); setResults([]); setOpen(false);
   };
 
@@ -218,7 +219,7 @@ function FreeItemRow({ onAdd }) {
   const add = () => {
     if (!nombre.trim()) return;
     onAdd({ _id: Date.now(), item_id:null, nombre:nombre.trim(), categoria:cat, unidad, cantidad });
-    setNombre(''); setCantidad('1'); setUnidad(UNITS[0]);
+    setNombre(''); setCantidad('1'); setUnidad(UNITS[0]); setCat('miscelaneos');
   };
 
   return (
@@ -392,25 +393,34 @@ function NuevaCompraModal({ profile, sedes, onSave, onClose, onGoProveedores }) 
         unidad: l.unidad || null, categoria: l.categoria || null,
       }))
     );
-    if (ie) { setErr(ie.message); setSaving(false); return; }
+    if (ie) {
+      // Rollback: borrar la compra huérfana para evitar duplicados en reintentos
+      await supabase.from('compras').delete().eq('id', compra.id);
+      setErr('Error al registrar los productos. La compra fue cancelada, intenta de nuevo.');
+      setSaving(false);
+      return;
+    }
 
-    // Auto-incrementar stock para ítems vinculados
+    // Auto-incrementar stock de forma atómica (evita race condition con read-modify-write)
+    const limitados = [];
+    const rpcFallidos = [];
     for (const l of lines.filter(li => li.item_id)) {
       const qty = +l.cantidad;
       if (qty <= 0) continue;
-      const { data: item } = await supabase.from('items')
-        .select('id,cantidad_actual,cantidad_maxima').eq('id', l.item_id).single();
-      if (item) {
-        const nueva = item.cantidad_actual + qty;
-        await supabase.from('items').update({
-          cantidad_actual: item.cantidad_maxima != null
-            ? Math.min(item.cantidad_maxima, nueva)
-            : nueva
-        }).eq('id', l.item_id);
+      if (l._cap_actual != null && l._cap_max != null && l._cap_actual + qty > l._cap_max) {
+        limitados.push(`${l.nombre} (espacio: ${l._cap_max - l._cap_actual}, comprado: ${qty})`);
       }
+      const { error: re } = await supabase.rpc('rpc_incrementar_stock', { p_item_id: l.item_id, p_cantidad: qty });
+      if (re) rpcFallidos.push(l.nombre);
     }
 
     setSaving(false); onSave(); onClose();
+    const alertParts = [];
+    if (limitados.length > 0)
+      alertParts.push(`⚠ Stock limitado al máximo en:\n${limitados.map(s=>`• ${s}`).join('\n')}\n\nAjusta el inventario manualmente si es necesario.`);
+    if (rpcFallidos.length > 0)
+      alertParts.push(`⚠ No se pudo actualizar el stock de:\n${rpcFallidos.map(s=>`• ${s}`).join('\n')}\n\nActualiza el inventario manualmente.`);
+    if (alertParts.length > 0) window.alert(alertParts.join('\n\n'));
   };
 
   const sedeName = sedes.find(s => s.id === sedeId)?.nombre;
@@ -540,6 +550,7 @@ function NuevaCompraModal({ profile, sedes, onSave, onClose, onGoProveedores }) 
 function ProveedoresTab({ profile, canEdit }) {
   const [list, setList]       = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [modal, setModal]     = useState(null);   // null | 'new' | {id,...}
   const [saving, setSaving]   = useState(false);
   const [err, setErr]         = useState('');
@@ -548,11 +559,13 @@ function ProveedoresTab({ profile, canEdit }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('proveedores')
+    setLoadError(null);
+    const { data, error } = await supabase.from('proveedores')
       .select('*')
       .eq('organizacion_id', profile.organizacion_id)
       .eq('activo', true)
       .order('nombre');
+    if (error) setLoadError('Error al cargar proveedores.');
     setList(data || []);
     setLoading(false);
   }, [profile.organizacion_id]);
@@ -610,7 +623,8 @@ function ProveedoresTab({ profile, canEdit }) {
 
   const disable = async p => {
     if (!window.confirm(`¿Deshabilitar al proveedor "${p.nombre}"?`)) return;
-    await supabase.from('proveedores').update({ activo:false }).eq('id', p.id);
+    const { error } = await supabase.from('proveedores').update({ activo:false }).eq('id', p.id);
+    if (error) { window.alert('Error al deshabilitar el proveedor. Intenta de nuevo.'); return; }
     load();
   };
 
@@ -638,6 +652,12 @@ function ProveedoresTab({ profile, canEdit }) {
         </div>
         {loading ? (
           <div style={{ padding:'40px 20px', textAlign:'center', color:T.lo }}>Cargando...</div>
+        ) : loadError ? (
+          <div style={{ padding:'20px', display:'flex', alignItems:'center', gap:10 }}>
+            <Ico.Warn s={15} c={T.crit}/>
+            <span style={{ fontSize:13, color:T.crit }}>{loadError}</span>
+            <Btn variant="secondary" size="sm" onClick={load} style={{ marginLeft:'auto' }}>Reintentar</Btn>
+          </div>
         ) : list.length === 0 ? (
           <div style={{ padding:'52px 20px', textAlign:'center' }}>
             <div style={{ fontSize:13.5, color:T.lo }}>Sin proveedores registrados</div>
@@ -961,6 +981,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
   const [tab, setTab]               = useState('facturas');
   const [compras, setCompras]       = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState(null);
   const [showModal, setShowModal]   = useState(false);
   const [viewingCompra, setViewing] = useState(null);
   const [searchQ, setSearchQ]       = useState('');
@@ -981,6 +1002,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     let q = supabase.from('compras')
       .select('*, proveedores(nombre,codigo_interno,nit,telefono,correo), sedes(nombre), compra_items(*), registrador:registrado_por(nombre)')
       .order('fecha_recepcion', { ascending:false })
@@ -989,7 +1011,8 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
     if (!isAdmin && !isAuditor && profile?.sede_id) {
       q = q.eq('sede_id', profile.sede_id);
     }
-    const { data } = await q;
+    const { data, error } = await q;
+    if (error) setLoadError('Error al cargar compras. Intenta de nuevo.');
     setCompras(data || []);
     setLoading(false);
   }, [isAdmin, isAuditor, profile?.sede_id]);
@@ -1006,8 +1029,21 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
   const confirmDelete = async () => {
     if (!delCompra) return;
     setDeleting(true);
-    await supabase.from('compras').delete().eq('id', delCompra.id);
+    // Revertir stock de ítems vinculados antes de eliminar
+    for (const item of (delCompra.compra_items || []).filter(l => l.item_id)) {
+      const qty = +item.cantidad;
+      if (qty > 0) {
+        const { error: re } = await supabase.rpc('rpc_decrementar_stock', { p_item_id: item.item_id, p_cantidad: qty });
+        if (re) {
+          setDeleting(false);
+          window.alert(`No se pudo revertir el stock de "${item.nombre}". La compra no fue eliminada. Intenta de nuevo.`);
+          return;
+        }
+      }
+    }
+    const { error } = await supabase.from('compras').delete().eq('id', delCompra.id);
     setDeleting(false);
+    if (error) { window.alert('Error al eliminar la compra. Intenta de nuevo.'); return; }
     setDelCompra(null);
     setViewing(null);
     load();
@@ -1109,8 +1145,7 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
                 padding:'10px 14px', marginBottom:20 }}>
                 <div style={{ fontSize:12, color:'#92400E', fontWeight:700, marginBottom:4 }}>⚠ Importante</div>
                 <div style={{ fontSize:12, color:'#92400E', lineHeight:1.5 }}>
-                  El stock vinculado <strong>no se revertirá</strong> automáticamente.
-                  Ajusta el inventario manualmente si es necesario.
+                  El stock vinculado <strong>se revertirá automáticamente</strong> en los ítems catalogados.
                 </div>
               </div>
               <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
@@ -1271,6 +1306,12 @@ export function ComprasScreen({ profile, isAdmin, isAuditor, sedes }) {
 
             {loading ? (
               <div style={{ padding:'48px 20px', textAlign:'center', color:T.lo }}>Cargando compras...</div>
+            ) : loadError ? (
+              <div style={{ padding:'24px 20px', display:'flex', alignItems:'center', gap:12 }}>
+                <Ico.Warn s={16} c={T.crit}/>
+                <span style={{ fontSize:13, color:T.crit }}>{loadError}</span>
+                <Btn variant="secondary" size="sm" onClick={load} style={{ marginLeft:'auto' }}>Reintentar</Btn>
+              </div>
             ) : filtered.length === 0 ? (
               <div style={{ padding:'52px 20px', textAlign:'center' }}>
                 <Ico.File s={30} c={T.border}/>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { T, Btn, Field, TInput } from '../../../shared/ui';
 
 const BANCOS = ['Banrural','Banco Industrial','G&T Continental','Bantrab','BAC Credomatic','Otro'];
@@ -6,6 +6,9 @@ const BANCOS = ['Banrural','Banco Industrial','G&T Continental','Bantrab','BAC C
 export function DepositoModal({ onSave, onClose, saving }) {
   const [f, setF] = useState({ banco:'Banrural', no_boleta:'', monto:'' });
   const [err, setErr] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { if (!saving) setSubmitting(false); }, [saving]);
 
   const set = (k, v) => { setF(p=>({...p,[k]:v})); setErr(e=>({...e,[k]:null})); };
 
@@ -20,7 +23,9 @@ export function DepositoModal({ onSave, onClose, saving }) {
   };
 
   const handleSave = () => {
+    if (submitting || saving) return;
     if (!validate()) return;
+    setSubmitting(true);
     onSave({
       banco:     f.banco.trim(),
       no_boleta: f.no_boleta.trim(),
@@ -59,7 +64,7 @@ export function DepositoModal({ onSave, onClose, saving }) {
       </div>
       <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
         <Btn variant="secondary" onClick={onClose}>Cancelar</Btn>
-        <Btn onClick={handleSave} disabled={saving}>Guardar depósito</Btn>
+        <Btn onClick={handleSave} disabled={saving || submitting}>Guardar depósito</Btn>
       </div>
     </div>
   );

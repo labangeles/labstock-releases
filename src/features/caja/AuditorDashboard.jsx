@@ -1,16 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+﻿import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
 } from 'recharts';
-import { T, Ico, Btn } from '../../shared/ui';
+import { T, Ico, Btn, fmtQ } from '../../shared/ui';
 import { supabase } from '../../lib/supabase';
 
 /* ── Helpers ─────────────────────────────────────────────── */
-const fmtQ = n =>
-  n == null ? '—'
-  : 'Q ' + Math.abs(Number(n)).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const fmtQAxis = n => {
   const abs = Math.abs(n);
@@ -153,16 +150,19 @@ export function AuditorDashboard({ onGoHistorial }) {
   const [periodo, setPeriodo] = useState('mes');
   const [cuadres, setCuadres] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const { start, end } = getRange(periodo);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('v_cuadres_resumen')
       .select('*')
       .gte('fecha', start)
       .lte('fecha', end)
       .order('fecha');
+    if (error) setLoadError('Error al cargar datos. Intenta de nuevo.');
     setCuadres(data || []);
     setLoading(false);
   }, [periodo]);
@@ -256,6 +256,15 @@ export function AuditorDashboard({ onGoHistorial }) {
         <div style={{ padding: '60px 0', textAlign: 'center', color: T.lo, fontSize: 13 }}>
           Cargando datos...
         </div>
+      ) : loadError ? (
+        <div style={{ background: T.critBg, border: `1px solid ${T.crit}44`, borderRadius: 12,
+          padding: '20px 24px', display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Ico.Warn s={18} c={T.crit}/>
+          <span style={{ fontSize: 13, color: T.crit }}>{loadError}</span>
+          <Btn variant="secondary" size="sm" onClick={load} style={{ marginLeft: 'auto' }}>
+            Reintentar
+          </Btn>
+        </div>
       ) : cuadres.length === 0 ? (
         <div style={{ padding: '60px 0', textAlign: 'center' }}>
           <Ico.DollarSign s={36} c={T.border}/>
@@ -274,13 +283,13 @@ export function AuditorDashboard({ onGoHistorial }) {
             <KpiCard
               label="Gastos totales" color={C.gastos} bg={C.gastosL}
               value={fmtQ(totalGastos)}
-              sub={`${((totalGastos/totalIngreso)*100||0).toFixed(1)}% del ingreso`}
+              sub={`${totalIngreso > 0 ? ((totalGastos/totalIngreso)*100).toFixed(1) : '0'}% del ingreso`}
               icon={<Ico.Banknote s={17} c={C.gastos}/>}
             />
             <KpiCard
               label="Depósitos totales" color={C.depositos} bg={C.depositosL}
               value={fmtQ(totalDepositos)}
-              sub={`${((totalDepositos/totalIngreso)*100||0).toFixed(1)}% del ingreso`}
+              sub={`${totalIngreso > 0 ? ((totalDepositos/totalIngreso)*100).toFixed(1) : '0'}% del ingreso`}
               icon={<Ico.Inbox s={17} c={C.depositos}/>}
             />
             <KpiCard
@@ -446,8 +455,8 @@ export function AuditorDashboard({ onGoHistorial }) {
                     </td>
                     <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: T.mid }}>
                       <span style={{
-                        background: (totalGastos/totalIngreso*100) > 30 ? T.warnBg : T.okBg,
-                        color:       (totalGastos/totalIngreso*100) > 30 ? T.warn   : T.ok,
+                        background: (totalIngreso > 0 && totalGastos/totalIngreso*100 > 30) ? T.warnBg : T.okBg,
+                        color:       (totalIngreso > 0 && totalGastos/totalIngreso*100 > 30) ? T.warn   : T.ok,
                         padding: '2px 8px', borderRadius: 20, fontSize: 11.5, fontWeight: 700,
                       }}>
                         {totalIngreso > 0 ? ((totalGastos/totalIngreso)*100).toFixed(1) : '—'}%

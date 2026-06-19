@@ -32,6 +32,10 @@ export default function MisVacacionesTab() {
       supabase.from('vacaciones_permisos').select('*').eq('empleado_id', empleado.id)
         .order('fecha_inicio', { ascending: false }),
     ]);
+    if (s.error || f.error || h.error) {
+      setMsg({ tipo: 'err', txt: 'Error al cargar tus vacaciones. Intenta de nuevo.' });
+      return;
+    }
     setSaldo(s.data || null);
     setFeriados(new Set((f.data || []).map((x) => x.fecha)));
     setHistorial(h.data || []);

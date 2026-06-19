@@ -14,6 +14,8 @@ async function logAct(sedeId, cuadreId, profile, accion, detalle, monto) {
   } catch {} // no bloquear si falla el log
 }
 
+const CAJA_BASE = 800;
+
 export function useCuadre(sedeId, profile) {
   const { isOnline, refreshPending } = useOnline();
 
@@ -24,7 +26,7 @@ export function useCuadre(sedeId, profile) {
   const [saving, setSaving]            = useState(false);
   const [rlsError, setRlsError]        = useState(null);
   const [fromCache, setFromCache]      = useState(false);
-  const [soranteAnterior, setSobrante] = useState(null);
+  const [sobranteAnterior, setSobrante] = useState(null);
 
   const today = (() => {
     const d = new Date();
@@ -97,7 +99,7 @@ export function useCuadre(sedeId, profile) {
       const { data: created, error: insertErr } = await supabase
         .from('cuadres_caja')
         .insert({ sede_id: sedeId, fecha: today, creado_por: profile.id,
-                  caja_base: 800, sobrante_anterior: sobranteAntMonto })
+                  caja_base: CAJA_BASE, sobrante_anterior: sobranteAntMonto })
         .select().single();
       if (insertErr) {
         setRlsError('Sin permiso para crear el cuadre. Contacta al administrador.');
@@ -144,17 +146,19 @@ export function useCuadre(sedeId, profile) {
   const loadRef = useRef(load);
   useEffect(() => { loadRef.current = load; }, [load]);
 
-  // Canal Realtime — solo activo con conexión
+  // Canal Realtime — solo activo con conexión y cuadre cargado
   useEffect(() => {
-    if (!sedeId || !isOnline) return;
+    if (!sedeId || !isOnline || !cuadre?.id) return;
     const ch = supabase.channel(`cuadre-rt-${sedeId}`)
       .on('postgres_changes', { event:'*', schema:'public', table:'cuadres_caja',
         filter:`sede_id=eq.${sedeId}` }, () => loadRef.current())
-      .on('postgres_changes', { event:'*', schema:'public', table:'gastos_caja'    }, () => loadRef.current())
-      .on('postgres_changes', { event:'*', schema:'public', table:'depositos_caja' }, () => loadRef.current())
+      .on('postgres_changes', { event:'*', schema:'public', table:'gastos_caja',
+        filter:`cuadre_id=eq.${cuadre.id}` }, () => loadRef.current())
+      .on('postgres_changes', { event:'*', schema:'public', table:'depositos_caja',
+        filter:`cuadre_id=eq.${cuadre.id}` }, () => loadRef.current())
       .subscribe();
     return () => supabase.removeChannel(ch);
-  }, [sedeId, isOnline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sedeId, isOnline, cuadre?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling de respaldo: solo cuando online y ventana visible
   useEffect(() => {
@@ -173,7 +177,7 @@ export function useCuadre(sedeId, profile) {
   const totalDepositosCents   = depositos.reduce((s,d)=>s+Math.round(Number(d.monto)*100),0);
   const ingresoCents          = Math.round(Number(cuadre?.ingreso_dia||0)*100);
   const cajaBaseCents         = Math.round(Number(cuadre?.caja_base||800)*100);
-  const sobranteCents         = soranteAnterior ? Math.round(soranteAnterior.monto * 100) : 0;
+  const sobranteCents         = sobranteAnterior ? Math.round(sobranteAnterior.monto * 100) : 0;
   const depositoEsperadoCents = sobranteCents + ingresoCents - totalGastosCents;
   const cajaFinalCents        = cajaBaseCents + sobranteCents + ingresoCents - totalGastosCents - totalDepositosCents;
   const diferenciaCents       = cajaFinalCents - cajaBaseCents;
@@ -219,6 +223,7 @@ export function useCuadre(sedeId, profile) {
     const tempId = crypto.randomUUID();
     setSaving(true);
 
+    const prevGastos = [...gastosRef.current];
     const newGasto = {
       id: tempId, cuadre_id: cuadre.id, descripcion, categoria,
       monto: val, comprobante: comprobante || null,
@@ -232,11 +237,16 @@ export function useCuadre(sedeId, profile) {
     cajaCache.patch(sedeId, { gastos: newGastos });
 
     if (isOnline) {
-      await supabase.from('gastos_caja').insert({
+      const { error } = await supabase.from('gastos_caja').insert({
         id: tempId, cuadre_id: cuadre.id, descripcion, categoria,
         monto: val, comprobante: comprobante || null, registrado_por: profile.id,
       });
-      logAct(sedeId, cuadre.id, profile, 'agregar_gasto', `${descripcion} — Q${val}`, val);
+      if (error) {
+        setGastos(prevGastos);
+        cajaCache.patch(sedeId, { gastos: prevGastos });
+      } else {
+        logAct(sedeId, cuadre.id, profile, 'agregar_gasto', `${descripcion} — Q${val}`, val);
+      }
     } else {
       cajaQueue.add({ op:'upsert', table:'gastos_caja', data:{
         id: tempId, cuadre_id: cuadre.id, descripcion, categoria,
@@ -248,15 +258,21 @@ export function useCuadre(sedeId, profile) {
   };
 
   const deleteGasto = async (gastoId, descripcion, monto) => {
-    if (!cuadre) return;
+    if (!cuadre || !isOpen) return;
     setSaving(true);
+    const prevGastos = [...gastosRef.current];
     const newGastos = gastosRef.current.filter(g => g.id !== gastoId);
     setGastos(newGastos);
     cajaCache.patch(sedeId, { gastos: newGastos });
 
     if (isOnline) {
-      await supabase.from('gastos_caja').delete().eq('id', gastoId);
-      logAct(sedeId, cuadre.id, profile, 'eliminar_gasto', `Eliminado: ${descripcion} Q${monto}`, Number(monto));
+      const { error } = await supabase.from('gastos_caja').delete().eq('id', gastoId);
+      if (error) {
+        setGastos(prevGastos);
+        cajaCache.patch(sedeId, { gastos: prevGastos });
+      } else {
+        logAct(sedeId, cuadre.id, profile, 'eliminar_gasto', `Eliminado: ${descripcion} Q${monto}`, Number(monto));
+      }
     } else {
       cajaQueue.add({ op:'delete', table:'gastos_caja', rowId: gastoId });
       refreshPending();
@@ -270,6 +286,7 @@ export function useCuadre(sedeId, profile) {
     const tempId = crypto.randomUUID();
     setSaving(true);
 
+    const prevDeps = [...depositosRef.current];
     const newDep = {
       id: tempId, cuadre_id: cuadre.id, banco, no_boleta, monto: val,
       registrado_por: profile.id,
@@ -282,11 +299,16 @@ export function useCuadre(sedeId, profile) {
     cajaCache.patch(sedeId, { depositos: newDeps });
 
     if (isOnline) {
-      await supabase.from('depositos_caja').insert({
+      const { error } = await supabase.from('depositos_caja').insert({
         id: tempId, cuadre_id: cuadre.id, banco, no_boleta,
         monto: val, registrado_por: profile.id,
       });
-      logAct(sedeId, cuadre.id, profile, 'agregar_deposito', `${banco} boleta ${no_boleta} Q${val}`, val);
+      if (error) {
+        setDepositos(prevDeps);
+        cajaCache.patch(sedeId, { depositos: prevDeps });
+      } else {
+        logAct(sedeId, cuadre.id, profile, 'agregar_deposito', `${banco} boleta ${no_boleta} Q${val}`, val);
+      }
     } else {
       cajaQueue.add({ op:'upsert', table:'depositos_caja', data:{
         id: tempId, cuadre_id: cuadre.id, banco, no_boleta,
@@ -298,15 +320,21 @@ export function useCuadre(sedeId, profile) {
   };
 
   const deleteDeposito = async (depositoId, banco, monto) => {
-    if (!cuadre) return;
+    if (!cuadre || !isOpen) return;
     setSaving(true);
+    const prevDeps = [...depositosRef.current];
     const newDeps = depositosRef.current.filter(d => d.id !== depositoId);
     setDepositos(newDeps);
     cajaCache.patch(sedeId, { depositos: newDeps });
 
     if (isOnline) {
-      await supabase.from('depositos_caja').delete().eq('id', depositoId);
-      logAct(sedeId, cuadre.id, profile, 'eliminar_deposito', `Eliminado: ${banco} Q${monto}`, Number(monto));
+      const { error } = await supabase.from('depositos_caja').delete().eq('id', depositoId);
+      if (error) {
+        setDepositos(prevDeps);
+        cajaCache.patch(sedeId, { depositos: prevDeps });
+      } else {
+        logAct(sedeId, cuadre.id, profile, 'eliminar_deposito', `Eliminado: ${banco} Q${monto}`, Number(monto));
+      }
     } else {
       cajaQueue.add({ op:'delete', table:'depositos_caja', rowId: depositoId });
       refreshPending();
@@ -329,6 +357,7 @@ export function useCuadre(sedeId, profile) {
 
   const reabrir = async () => {
     if (!cuadre || cuadre.estado !== 'cerrado') return;
+    if (profile?.rol !== 'admin') return;
     setSaving(true);
     setCuadre(c => ({ ...c, estado:'abierto', reabierto_por:profile.id }));
     const { error } = await supabase.from('cuadres_caja').update({
@@ -343,7 +372,7 @@ export function useCuadre(sedeId, profile) {
     cuadre, gastos, depositos, loading, saving, isOpen, rlsError, fromCache,
     totalGastos, totalDepositos, ingresoNum,
     cajaBase, sobrante, depositoEsperado, cajaFinal, diferencia,
-    soranteAnterior,
+    sobranteAnterior,
     saveIngreso, addGasto, deleteGasto, addDeposito, deleteDeposito,
     cerrar, reabrir, reload: load,
   };

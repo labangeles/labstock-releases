@@ -180,7 +180,8 @@ export default function ChatInterno({ profile }) {
       const { data: profs } = await supabase
         .from('profiles')
         .select('id, nombre, rol')
-        .eq('activo', true);
+        .eq('activo', true)
+        .eq('organizacion_id', profile.organizacion_id);
 
       // Fotos de todos los compañeros vía RPC SECURITY DEFINER
       const { data: fotosData } = await supabase.rpc('chat_fotos_perfil');
@@ -218,7 +219,7 @@ export default function ChatInterno({ profile }) {
         })
         .subscribe();
 
-      presencia = supabase.channel('presencia', { config: { presence: { key: user.id } } });
+      presencia = supabase.channel(`presencia-${profile.organizacion_id}`, { config: { presence: { key: user.id } } });
       presencia
         .on('presence', { event: 'sync' }, () => {
           setOnline(new Set(Object.keys(presencia.presenceState())));

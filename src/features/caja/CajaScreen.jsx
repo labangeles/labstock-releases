@@ -56,7 +56,7 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
     cuadre, gastos, depositos, loading, saving, isOpen, rlsError,
     totalGastos, totalDepositos, ingresoNum,
     cajaBase, sobrante, depositoEsperado, cajaFinal, diferencia,
-    soranteAnterior,
+    sobranteAnterior,
     saveIngreso, addGasto, deleteGasto, addDeposito, deleteDeposito,
     cerrar, reabrir,
   } = useCuadre(sedeId, profile);
@@ -109,21 +109,21 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
         </div>
       )}
 
-      {soranteAnterior && isOpen && diferencia !== 0 && (
+      {sobranteAnterior && isOpen && diferencia !== 0 && (
         <div style={{ background:'rgba(234,179,8,0.1)', border:`1px solid ${T.warn}55`,
           borderRadius:10, padding:'10px 14px', display:'flex', gap:10, alignItems:'flex-start' }}>
           <Ico.Warn s={16} c={T.warn} style={{flexShrink:0,marginTop:1}}/>
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:T.warn, marginBottom:2 }}>
-              Sobrante del día anterior: {fmtQ(soranteAnterior.monto)}
+              Sobrante del día anterior: {fmtQ(sobranteAnterior.monto)}
             </div>
             <div style={{ fontSize:12, color:T.mid }}>
-              {soranteAnterior.fecha
-                ? <>El cuadre del {new Date(soranteAnterior.fecha + 'T12:00:00').toLocaleDateString('es-GT',
+              {sobranteAnterior.fecha
+                ? <>El cuadre del {new Date(sobranteAnterior.fecha + 'T12:00:00').toLocaleDateString('es-GT',
                     { weekday:'long', day:'2-digit', month:'long' })} cerró con efectivo extra en caja. </>
                 : <>Hay efectivo acumulado de días anteriores en caja. </>
               }
-              Verifica que el efectivo físico coincide con la caja base actual (Q800).
+              Verifica que el efectivo físico coincide con la caja base actual (Q{Math.round(cajaBase)}).
             </div>
           </div>
         </div>
@@ -300,16 +300,19 @@ function CuadreSede({ sedeId, sedeName, profile, isAdmin }) {
 function AdminDashboard({ sedes, profile }) {
   const [selectedId, setSelectedId] = useState(null);
   const [resumen, setResumen]       = useState([]);
+  const [loadError, setLoadError]   = useState(null);
   const today = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   })();
 
   const loadResumen = useCallback(async () => {
-    const { data } = await supabase
+    setLoadError(null);
+    const { data, error } = await supabase
       .from('v_cuadres_resumen')
       .select('sede_id,sede_nombre,fecha,ingreso_dia,total_gastos,total_depositos,diferencia,estado')
       .eq('fecha', today);
+    if (error) setLoadError('Error al cargar el resumen. Intenta de nuevo.');
     setResumen(data || []);
   }, [today]);
 
@@ -374,6 +377,17 @@ function AdminDashboard({ sedes, profile }) {
         <h1 style={{ fontSize:21, fontWeight:700, color:T.hi, margin:0 }}>Cuadre del día</h1>
         <p style={{ fontSize:12.5, color:T.lo, marginTop:4 }}>{fmtFecha(today)}</p>
       </div>
+
+      {loadError && (
+        <div style={{ background:T.critBg, border:`1px solid ${T.crit}44`, borderRadius:10,
+          padding:'10px 16px', display:'flex', alignItems:'center', gap:10 }}>
+          <Ico.Warn s={15} c={T.crit}/>
+          <span style={{ fontSize:13, color:T.crit }}>{loadError}</span>
+          <Btn variant="secondary" size="sm" onClick={loadResumen} style={{ marginLeft:'auto' }}>
+            Reintentar
+          </Btn>
+        </div>
+      )}
 
       {/* Totales globales */}
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12,

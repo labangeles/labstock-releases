@@ -147,11 +147,15 @@ const TOOLS = {
     return { total: data.length, cuadres: data };
   },
 
-  async pedidos_activos() {
-    const { data, error } = await supabase.from('pedidos')
-      .select('referencia, estado, created_at')
+  async pedidos_activos(_args, rol, _permisos, forcedSedeId) {
+    let q = supabase.from('pedidos')
+      .select('referencia, estado, created_at, sede_origen_id, sede_destino_id')
       .not('estado', 'in', '(entregado,cancelado)')
       .order('created_at', { ascending: false }).limit(40);
+    if (rol === 'tecnico' && forcedSedeId) {
+      q = q.or(`sede_origen_id.eq.${forcedSedeId},sede_destino_id.eq.${forcedSedeId}`);
+    }
+    const { data, error } = await q;
     if (error) return { error: error.message };
     return { total: data.length, pedidos: data };
   },

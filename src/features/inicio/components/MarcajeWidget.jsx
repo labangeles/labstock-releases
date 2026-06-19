@@ -176,9 +176,10 @@ export function MarcajeWidget({ profile }) {
   const [horario,  setHorario]  = useState(null);
   const [marcajes, setMarcajes] = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [marcando, setMarcando] = useState(false);
-  const [msg,      setMsg]      = useState(null);
-  const [ahora,    setAhora]    = useState(new Date());
+  const [marcando,    setMarcando]    = useState(false);
+  const [msg,         setMsg]         = useState(null);
+  const [cargarError, setCargarError] = useState(null);
+  const [ahora,       setAhora]       = useState(new Date());
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -189,6 +190,7 @@ export function MarcajeWidget({ profile }) {
   const cargar = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
+    setCargarError(null);
     try {
       const _d = new Date();
       const fechaHoy = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
@@ -204,6 +206,8 @@ export function MarcajeWidget({ profile }) {
       ]);
       setHorario(hor || HORARIO_DEF);
       setMarcajes(marks || []);
+    } catch {
+      setCargarError('Error al cargar el marcaje. Intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -212,6 +216,21 @@ export function MarcajeWidget({ profile }) {
   useEffect(() => { cargar(); }, [cargar]);
 
   if (loading) return null;
+  if (cargarError) return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+      padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={T.crit}
+        strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span style={{ fontSize: 12.5, color: T.crit, flex: 1 }}>{cargarError}</span>
+      <button onClick={cargar} style={{ fontSize: 12, color: T.teal, background: 'none',
+        border: 'none', cursor: 'pointer', padding: '4px 8px', fontFamily: 'inherit' }}>
+        Reintentar
+      </button>
+    </div>
+  );
   if (!empleado) return (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
       padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>

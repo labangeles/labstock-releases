@@ -1,7 +1,7 @@
 {
     "name": "labstock",
     "productName": "LabStock",
-    "version": "1.8.7",
+    "version": "1.8.8",
     "description": "Sistema de inventario - Laboratorio Clinico Los Angeles",
     "main": "electron/main.js",
     "scripts": {
